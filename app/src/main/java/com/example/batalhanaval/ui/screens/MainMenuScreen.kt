@@ -17,10 +17,10 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainMenuScreen(
-    playerName: String, // Nome (nick) do jogador
-    onStartLocalGame: () -> Unit,
-    onStartOnlineGame: () -> Unit,
-    onShowLeaderboard: () -> Unit
+    playerName: String,
+    onStartOnlineGame: () -> Unit, // Apenas jogo online
+    onShowLeaderboard: () -> Unit,
+    onShowChooseOpponent: () -> Unit // Nova função para abrir a tela de escolha do adversário
 ) {
     Column(
         modifier = Modifier
@@ -28,23 +28,25 @@ fun MainMenuScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.Top
     ) {
-        // TopAppBar com o nome do jogador
         TopAppBar(
-            title = { Text("Bem-vindo, $playerName!") },
-            modifier = Modifier.padding(bottom = 16.dp) // Espaçamento entre a barra e o conteúdo
+            title = { Text("Helcome, $playerName!") },
+            modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Botões do menu principal
-        Button(onClick = { onStartLocalGame() }) {
-            Text("Start Local Game")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = { onStartOnlineGame() }) {
             Text("Start Online Game")
         }
+
         Spacer(modifier = Modifier.height(16.dp))
+
         Button(onClick = { onShowLeaderboard() }) {
             Text("Leaderboard")
+        }
+
+        // Botão para navegar para a tela de escolha do adversário
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { onShowChooseOpponent() }) {
+            Text("Choose Opponent")
         }
     }
 }
