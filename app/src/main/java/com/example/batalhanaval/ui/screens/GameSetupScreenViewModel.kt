@@ -1,96 +1,76 @@
-package com.example.batalhanaval.ui.screens
+package com.example.batalhanaval.ui.viewmodels
 
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.State
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.batalhanaval.data.firebase.FirebaseService
 import com.example.batalhanaval.ui.components.CellState
 import com.example.batalhanaval.ui.components.Ship
-import com.example.batalhanaval.ui.components.ShipOrientation
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 class GameSetupScreenViewModel : ViewModel() {
 
-    private val _board = mutableStateOf(createEmptyBoard())
-    val board: State<List<List<CellState>>> = _board
+    private val _board = MutableStateFlow(List(8) { List(8) { CellState.EMPTY } })
+    val board: StateFlow<List<List<CellState>>> = _board
 
-    private val _ships = mutableStateOf(mutableListOf<Ship>())
-    val ships: State<MutableList<Ship>> = _ships
+    private val _ships = MutableStateFlow(
+        listOf(
+            Ship(1), Ship(1), Ship(2), Ship(2), Ship(3), Ship(4)
+        )
+    )
+    val ships: StateFlow<List<Ship>> = _ships
 
-    private val _selectedShip = mutableStateOf(_ships.value[0])
-    val selectedShip: State<Ship> = _selectedShip
+    private val _selectedShip = MutableStateFlow<Ship?>(null)
+    val selectedShip: StateFlow<Ship?> = _selectedShip
 
-    private val _isHorizontal = mutableStateOf(true) // Para alternar entre horizontal e vertical
-    val isHorizontal: State<Boolean> = _isHorizontal
+    private val _isHorizontal = MutableStateFlow(true)
+    val isHorizontal: StateFlow<Boolean> = _isHorizontal
 
-    // Função para alternar a orientação do barco (horizontal ou vertical)
+    fun selectShip(ship: Ship) {
+        _selectedShip.value = ship
+    }
+
     fun toggleOrientation() {
         _isHorizontal.value = !_isHorizontal.value
     }
 
-    // Função para tentar colocar o barco no tabuleiro
-    fun placeShip(row: Int, col: Int): Boolean {
-        val ship = _selectedShip.value
-        if (_isHorizontal.value) {
-            // Verifica se o barco cabe horizontalmente
-            if (col + ship.size <= 10 && ship.position.all { _board.value[row][it.second] == CellState.EMPTY }) {
-                // Atualiza a posição do barco no board
-                val updatedPosition = List(ship.size) { Pair(row, col + it) }
-                ship.position = updatedPosition // Atualiza a posição do barco
-                val updatedBoard = _board.value.mapIndexed { rIndex, rowCells ->
-                    rowCells.mapIndexed { cIndex, cell ->
-                        if (updatedPosition.any { it.first == rIndex && it.second == cIndex }) {
-                            CellState.SHIP
-                        } else {
-                            cell
-                        }
+    fun placeShip(row: Int, col: Int) {
+        val selectedShip = _selectedShip.value ?: return
+        val newBoard = _board.value.toMutableList()
+
+        for (i in 0 until selectedShip.size) {
+            val r = if (_isHorizontal.value) row else row + i
+            val c = if (_isHorizontal.value) col + i else col
+
+            if (r !in 0..7 || c !in 0..7 || newBoard[r][c] != CellState.EMPTY) return
+
+            newBoard[r] = newBoard[r].toMutableList().apply { this[c] = CellState.SHIP }
+        }
+
+        _board.value = newBoard
+        _ships.value = _ships.value.toMutableList().apply { remove(selectedShip) }
+        _selectedShip.value = null
+    }
+
+    fun saveBoardAndSwitchPlayer(
+        gameId: String,
+        currentPlayer: String,
+        onComplete: () -> Unit
+    ) {
+        viewModelScope.launch {
+            // Salvar o tabuleiro do jogador atual no Firebase
+            FirebaseService.saveBoardToFirebase(gameId, _board.value) { success ->
+                if (success) {
+                    // Atualizar o estado dos jogadores após salvar o tabuleiro
+                    FirebaseService.updatePlayerStatusAfterPlacement(
+                        gameId = gameId,
+                        currentPlayer = currentPlayer
+                    ) {
+                        onComplete()
                     }
                 }
-                _board.value = updatedBoard // Atualiza o board com o novo estado
-                return true
-            }
-        } else {
-            // Verifica se o barco cabe verticalmente
-            if (row + ship.size <= 10 && ship.position.all { _board.value[it.first][col] == CellState.EMPTY }) {
-                // Atualiza a posição do barco no board
-                val updatedPosition = List(ship.size) { Pair(row + it, col) }
-                ship.position = updatedPosition // Atualiza a posição do barco
-                val updatedBoard = _board.value.mapIndexed { rIndex, rowCells ->
-                    rowCells.mapIndexed { cIndex, cell ->
-                        if (updatedPosition.any { it.first == rIndex && it.second == cIndex }) {
-                            CellState.SHIP
-                        } else {
-                            cell
-                        }
-                    }
-                }
-                _board.value = updatedBoard // Atualiza o board com o novo estado
-                return true
             }
         }
-        return false
-    }
-
-    // Função para finalizar a configuração e começar o jogo
-    fun finishSetup() {
-        // Finalizar configuração, pode realizar navegação ou outros processos
-    }
-
-    // Função para criar o tabuleiro vazio
-    private fun createEmptyBoard(): List<List<CellState>> {
-        return List(8) {
-            List(8) { CellState.EMPTY }
-        }
-    }
-
-    // Função para criar os barcos iniciais
-    private fun createDefaultShips(): MutableList<Ship> {
-        return mutableListOf(
-            Ship(size = 1),
-            Ship(size = 1),
-            Ship(size = 1),
-            Ship(size = 2),
-            Ship(size = 2),
-            Ship(size = 3),
-            Ship(size = 4)
-        )
     }
 }

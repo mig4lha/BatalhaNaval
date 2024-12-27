@@ -77,5 +77,18 @@ fun LoginScreen(navController: NavController) {
         if (errorMessage.isNotEmpty()) {
             Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(
+            onClick = {
+                navController.navigate("register") {
+                    launchSingleTop = true
+                    popUpTo("login_screen") { inclusive = false }
+                }
+            }
+        ) {
+            Text("Click here for register")
+        }
     }
 }

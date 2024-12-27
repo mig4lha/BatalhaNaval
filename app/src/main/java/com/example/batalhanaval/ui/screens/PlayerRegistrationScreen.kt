@@ -37,7 +37,7 @@ fun PlayerRegistrationScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Text(text = "Digite o seu Nick")
+        Text(text = "Enter your Nick!")
         Spacer(modifier = Modifier.height(20.dp))
 
         TextField(
@@ -54,7 +54,7 @@ fun PlayerRegistrationScreen(
         // Exibe mensagem de erro se o nick já existir
         if (!isNickAvailable && nick.isNotEmpty()) {
             Text(
-                text = "Este nick já está em uso. Escolha outro!",
+                text = "This nickname is already in use. Please choose another one!",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
@@ -62,7 +62,7 @@ fun PlayerRegistrationScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Text(text = "Digite sua Senha")
+        Text(text = "Enter your Password")
         Spacer(modifier = Modifier.height(20.dp))
 
         TextField(
@@ -70,14 +70,14 @@ fun PlayerRegistrationScreen(
             onValueChange = { newPassword ->
                 password = newPassword
             },
-            label = { Text("Senha") },
+            label = { Text("Password") },
             modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation()
         )
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Text(text = "Confirme sua Senha")
+        Text(text = "Confirm your Password")
         Spacer(modifier = Modifier.height(20.dp))
 
         TextField(
@@ -85,7 +85,7 @@ fun PlayerRegistrationScreen(
             onValueChange = { newConfirmPassword ->
                 confirmPassword = newConfirmPassword
             },
-            label = { Text("Confirmar Senha") },
+            label = { Text("Confirm Password") },
             modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation()
         )
@@ -95,7 +95,7 @@ fun PlayerRegistrationScreen(
         // Validando se as senhas coincidem
         if (password != confirmPassword) {
             Text(
-                text = "As senhas não coincidem!",
+                text = "Passwords do not match!",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
@@ -115,17 +115,17 @@ fun PlayerRegistrationScreen(
                             onPlayerRegistered(playerId)
                         } else {
                             // Caso ocorra erro no registro
-                            onError("Falha ao registrar o jogador!")
+                            onError("Failed to register player!")
                         }
                     }
                 } else {
-                    onError("Verifique as informações fornecidas.")
+                    onError("Verify the information provided.")
                 }
             },
             enabled = isNickAvailable && password.isNotEmpty() && password == confirmPassword && !isLoading,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = if (isLoading) "Registrando..." else "Registrar")
+            Text(text = if (isLoading) "Registering..." else "Register")
         }
     }
 }

@@ -1,130 +1,62 @@
-package com.example.batalhanaval.ui.screens
+package com.example.batalhanaval.ui.viewmodels
 
-import android.util.Log
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import com.example.batalhanaval.ui.components.CellState
+import androidx.lifecycle.viewModelScope
 import com.example.batalhanaval.data.firebase.FirebaseService
+import com.example.batalhanaval.ui.components.CellState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 class GameScreenViewModel : ViewModel() {
 
-    private val _boardPlayer1 = mutableStateOf(createEmptyBoard())
-    val boardPlayer1: State<List<List<CellState>>> = _boardPlayer1
+    private val _currentPlayerBoard = MutableStateFlow(List(8) { List(8) { CellState.EMPTY } })
+    val currentPlayerBoard: StateFlow<List<List<CellState>>> = _currentPlayerBoard
 
-    private val _boardPlayer2 = mutableStateOf(createEmptyBoard())
-    val boardPlayer2: State<List<List<CellState>>> = _boardPlayer2
+    private val _opponentBoard = MutableStateFlow(List(8) { List(8) { CellState.EMPTY } })
+    val opponentBoard: StateFlow<List<List<CellState>>> = _opponentBoard
 
-    private val _selectedShipSize = mutableStateOf(1)
-    val selectedShipSize: State<Int> = _selectedShipSize
+    private val _currentPlayerState = MutableStateFlow("waiting")
+    val currentPlayerState: StateFlow<String> = _currentPlayerState
 
-    private val _currentPlayer = mutableStateOf(1)
-    val currentPlayer: State<Int> = _currentPlayer
+    private val _opponentName = MutableStateFlow<String?>(null)
+    val opponentName: StateFlow<String?> = _opponentName
 
-    private val _gameOver = mutableStateOf(false)
-    val gameOver: State<Boolean> = _gameOver
-
-    fun selectShip(size: Int) {
-        _selectedShipSize.value = size
-    }
-
-    fun placeShip(row: Int, col: Int, isHorizontal: Boolean): Boolean {
-        val currentBoard = if (_currentPlayer.value == 1) _boardPlayer1.value else _boardPlayer2.value
-        val mutableBoard = currentBoard.map { it.toMutableList() }.toMutableList()
-
-        if (isHorizontal) {
-            if (col + _selectedShipSize.value > 8 || (0 until _selectedShipSize.value).any { mutableBoard[row][col + it] != CellState.EMPTY }) {
-                return false
-            }
-            for (i in 0 until _selectedShipSize.value) {
-                mutableBoard[row][col + i] = CellState.SHIP
-            }
-        } else {
-            if (row + _selectedShipSize.value > 8 || (0 until _selectedShipSize.value).any { mutableBoard[row + it][col] != CellState.EMPTY }) {
-                return false
-            }
-            for (i in 0 until _selectedShipSize.value) {
-                mutableBoard[row + i][col] = CellState.SHIP
-            }
-        }
-
-        if (_currentPlayer.value == 1) {
-            _boardPlayer1.value = mutableBoard
-        } else {
-            _boardPlayer2.value = mutableBoard
-        }
-        return true
-    }
-
-    fun attack(row: Int, col: Int) {
-        if (_gameOver.value) return
-
-        val updatedBoard = if (_currentPlayer.value == 1) {
-            _boardPlayer2.value.map { it.toMutableList() }.mapIndexed { r, rowCells ->
-                rowCells.mapIndexed { c, cell ->
-                    if (r == row && c == col) if (cell == CellState.SHIP) CellState.HIT else CellState.MISS else cell
+    fun loadGameBoards(gameId: String, currentPlayer: String) {
+        viewModelScope.launch {
+            FirebaseService.getGameBoards(gameId, currentPlayer) { boards ->
+                if (boards != null) {
+                    _currentPlayerBoard.value = boards["currentPlayerBoard"] ?: _currentPlayerBoard.value
+                    _opponentBoard.value = boards["opponentBoard"] ?: _opponentBoard.value
                 }
             }
-        } else {
-            _boardPlayer1.value.map { it.toMutableList() }.mapIndexed { r, rowCells ->
-                rowCells.mapIndexed { c, cell ->
-                    if (r == row && c == col) if (cell == CellState.SHIP) CellState.HIT else CellState.MISS else cell
+
+            // Obter o nome do oponente
+            FirebaseService.getOpponentName(gameId, currentPlayer) { opponent ->
+                _opponentName.value = opponent
+            }
+        }
+    }
+
+    fun registerShot(gameId: String, currentPlayer: String, row: Int, col: Int, onShotComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            FirebaseService.registerShot(gameId, currentPlayer, row, col) { hit ->
+                if (hit != null) {
+                    // Atualizar os tabuleiros após o tiro
+                    loadGameBoards(gameId, currentPlayer)
+                    onShotComplete(hit)
                 }
             }
         }
-
-        if (_currentPlayer.value == 1) _boardPlayer2.value = updatedBoard else _boardPlayer1.value =
-            updatedBoard
-
-        // Enviar o ataque para o Firebase
-        saveBoardStateToFirebase()
-
-        checkForWinner()
-
-        if (!_gameOver.value) switchPlayer()
     }
 
-    private fun switchPlayer() {
-        _currentPlayer.value = if (_currentPlayer.value == 1) 2 else 1
-    }
-
-    private fun checkForWinner() {
-        if (_boardPlayer1.value.flatten().none { it == CellState.SHIP }) {
-            _gameOver.value = true
-        } else if (_boardPlayer2.value.flatten().none { it == CellState.SHIP }) {
-            _gameOver.value = true
-        }
-    }
-
-    private fun createEmptyBoard(): List<List<CellState>> {
-        return List(8) {
-            List(8) { CellState.EMPTY }
-        }
-    }
-
-    private fun boardToFirebaseFormat(board: List<List<CellState>>): List<Map<String, Any>> {
-        return board.flatMapIndexed { rowIndex, row ->
-            row.mapIndexed { colIndex, cell ->
-                mapOf(
-                    "row" to rowIndex,
-                    "col" to colIndex,
-                    "state" to cell.name
-                )
-            }
-        }
-    }
-
-    private fun saveBoardStateToFirebase() {
-        FirebaseService.getGameId { gameId ->
-            if (gameId != null) {
-                val boardPlayer1Formatted = boardToFirebaseFormat(_boardPlayer1.value)
-                val boardPlayer2Formatted = boardToFirebaseFormat(_boardPlayer2.value)
-
-                FirebaseService.saveFormattedBoards(gameId, boardPlayer1Formatted, boardPlayer2Formatted) {
-                    Log.d("Game", "Tabuleiros salvos com sucesso")
+    fun updatePlayerState(gameId: String, currentPlayer: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            FirebaseService.getPlayerState(gameId, currentPlayer) { state ->
+                if (state != null) {
+                    _currentPlayerState.value = state
+                    onComplete()
                 }
-            } else {
-                Log.e("Game", "Erro ao recuperar o ID do jogo")
             }
         }
     }

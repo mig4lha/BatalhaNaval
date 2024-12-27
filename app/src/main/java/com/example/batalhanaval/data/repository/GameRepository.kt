@@ -22,8 +22,8 @@ class GameRepository {
      * @param playerId identificador do jogador (pode ser o uid retornado pela Auth).
      * @param score pontuação a ser salva.
      */
-    fun saveScore(playerId: String, score: Int) {
-        FirebaseService.saveScore(playerId, score)
+    fun saveScorePlayer(playerId: String, score: Int) {
+        FirebaseService.saveScorePlayer(playerId, score)
     }
 
     /**

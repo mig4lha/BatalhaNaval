@@ -18,9 +18,10 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun MainMenuScreen(
     playerName: String,
-    onStartOnlineGame: () -> Unit, // Apenas jogo online
+    onStartOnlineGame: () -> Unit,
     onShowLeaderboard: () -> Unit,
-    onShowChooseOpponent: () -> Unit // Nova função para abrir a tela de escolha do adversário
+    onShowChooseOpponent: () -> Unit,
+    onShowActiveGames: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -29,7 +30,7 @@ fun MainMenuScreen(
         verticalArrangement = Arrangement.Top
     ) {
         TopAppBar(
-            title = { Text("Helcome, $playerName!") },
+            title = { Text("Welcome, $playerName!") },
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
@@ -43,10 +44,16 @@ fun MainMenuScreen(
             Text("Leaderboard")
         }
 
-        // Botão para navegar para a tela de escolha do adversário
         Spacer(modifier = Modifier.height(16.dp))
+
         Button(onClick = { onShowChooseOpponent() }) {
             Text("Choose Opponent")
+        }
+
+        // Botão para navegar para a tela de jogos ativos
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { onShowActiveGames() }) {
+            Text("Active Games")
         }
     }
 }
