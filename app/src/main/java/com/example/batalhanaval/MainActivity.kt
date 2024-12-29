@@ -121,6 +121,11 @@ class MainActivity : ComponentActivity() {
                                 navController.navigate("main_menu/$currentPlayerId") {
                                     popUpTo("main_menu/$currentPlayerId") { inclusive = true }
                                 }
+                            },
+                            navigateToWaitOpponentScreen = {
+                                navController.navigate("wait_opponent_screen/$gameId/$currentPlayerId") {
+                                    popUpTo("game_screen/$gameId/$currentPlayerId") { inclusive = false }
+                                }
                             }
                         )
                     }

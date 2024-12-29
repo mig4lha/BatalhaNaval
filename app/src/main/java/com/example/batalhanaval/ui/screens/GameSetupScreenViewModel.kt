@@ -1,5 +1,6 @@
 package com.example.batalhanaval.ui.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.batalhanaval.data.firebase.FirebaseService
@@ -60,7 +61,7 @@ class GameSetupScreenViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             // Salvar o tabuleiro do jogador atual no Firebase
-            FirebaseService.saveBoardToFirebase(gameId, _board.value) { success ->
+            FirebaseService.saveBoardToFirebase(gameId, currentPlayer, _board.value) { success ->
                 if (success) {
                     // Atualizar o estado dos jogadores após salvar o tabuleiro
                     FirebaseService.updatePlayerStatusAfterPlacement(
@@ -69,6 +70,8 @@ class GameSetupScreenViewModel : ViewModel() {
                     ) {
                         onComplete()
                     }
+                } else {
+                    Log.e("GameSetupScreenViewModel", "Erro ao salvar o tabuleiro do jogador $currentPlayer.")
                 }
             }
         }

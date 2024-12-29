@@ -6,6 +6,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.example.batalhanaval.data.model.ScoreItem
 import com.example.batalhanaval.ui.components.CellState
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
 
 object FirebaseService {
 
@@ -129,6 +131,26 @@ object FirebaseService {
             }
     }
 
+    fun getPlayers(gameId: String, onComplete: (String?, String?) -> Unit) {
+        db.collection("games").document(gameId)
+            .get()
+            .addOnSuccessListener { document ->
+                val player1 = document.getString("player1")
+                val player2 = document.getString("player2")
+
+                if (player1 != null && player2 != null) {
+                    onComplete(player1, player2)
+                } else {
+                    Log.e("FirebaseService", "Os campos player1 ou player2 estão nulos no jogo $gameId")
+                    onComplete(null, null)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("FirebaseService", "Erro ao obter players no jogo $gameId", e)
+                onComplete(null, null)
+            }
+    }
+
     //Vai buscar o ID do jogo
     fun getGameId(onResult: (String?) -> Unit) {
         // Recuperar o ID do jogo da coleção "games"
@@ -188,128 +210,242 @@ object FirebaseService {
             }
     }
 
-    // Cria uma nova partida
-    fun createGame(player1Id: String, onGameCreated: (String?) -> Unit) {
-        val gameData = hashMapOf(
-            "player1Id" to player1Id,
-            "boardPlayer1" to createEmptyBoard(),
-            "boardPlayer2" to createEmptyBoard(),
-            "turn" to 1,
-            "status" to "waiting"
-        )
-
-        db.collection("games")  // Aqui, a coleção "games" será criada se não existir
-            .add(gameData)
-            .addOnSuccessListener { documentReference ->
-                onGameCreated(documentReference.id)  // Retorna o ID do jogo
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao criar partida", e)
-                onGameCreated(null)  // Caso não consiga criar o jogo
-            }
-    }
-
-    // Aceita um desafio e inicia a partida
-    fun acceptGame(gameId: String, player2Id: String, onGameStarted: (Boolean) -> Unit) {
-        val gameRef = db.collection("games").document(gameId)
-
-        gameRef.update("player2Id", player2Id, "status", "in_progress")
-            .addOnSuccessListener {
-                onGameStarted(true)
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao aceitar desafio", e)
-                onGameStarted(false)
-            }
-    }
 
     //Salva o estado do tabuleiro no Firestore
-    fun saveBoardToFirebase(gameId: String, board: List<List<CellState>>, onComplete: (Boolean) -> Unit) {
-        val formattedBoard = board.flatMapIndexed { row, cols ->
-            cols.mapIndexed { col, cell ->
-                mapOf(
-                    "row" to row,
-                    "col" to col,
-                    "state" to cell.name
-                )
-            }
-        }
-
-        db.collection("games").document(gameId)
-            .update("boardPlayer1", formattedBoard)
-            .addOnSuccessListener {
-                Log.d("FirebaseService", "Tabuleiro salvo com sucesso")
-                onComplete(true)
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao salvar tabuleiro", e)
+    fun saveBoardToFirebase(
+        gameId: String,
+        currentPlayer: String,
+        board: List<List<CellState>>,
+        onComplete: (Boolean) -> Unit
+    ) {
+        // Obtém os jogadores antes de salvar o tabuleiro
+        getPlayers(gameId) { player1, player2 ->
+            if (player1 == null || player2 == null) {
+                Log.e("FirebaseService", "Não foi possível obter os jogadores para o jogo $gameId")
                 onComplete(false)
+                return@getPlayers
             }
+
+            // Determina a chave do tabuleiro com base no jogador atual
+            val boardKey = if (currentPlayer == player1) "boardPlayer1" else "boardPlayer2"
+
+            // Formata o tabuleiro para salvar no Firestore
+            val formattedBoard = board.flatMapIndexed { row, cols ->
+                cols.mapIndexed { col, cell ->
+                    mapOf(
+                        "row" to row,
+                        "col" to col,
+                        "state" to cell.name
+                    )
+                }
+            }
+
+            // Atualiza o Firestore com o tabuleiro correto
+            db.collection("games").document(gameId)
+                .update(boardKey, formattedBoard)
+                .addOnSuccessListener {
+                    Log.d("FirebaseService", "Tabuleiro salvo com sucesso no $boardKey")
+                    onComplete(true)
+                }
+                .addOnFailureListener { e ->
+                    Log.e("FirebaseService", "Erro ao salvar tabuleiro no $boardKey", e)
+                    onComplete(false)
+                }
+        }
     }
 
     // Recupera os tabuleiros de tracking para o jogador atual e o adversário
-    fun getGameBoards(gameId: String, currentPlayer: String, onComplete: (Map<String, List<List<CellState>>>?) -> Unit) {
+    fun getGameBoards(
+        gameId: String,
+        currentPlayer: String,
+        onComplete: (Map<String, List<List<CellState>>>) -> Unit
+    ) {
         db.collection("games").document(gameId)
             .get()
             .addOnSuccessListener { documentSnapshot ->
-                // Identificar se o jogador é player1 ou player2
-                val player1 = documentSnapshot.getString("player1")
-                val player2 = documentSnapshot.getString("player2")
+                val player1 = documentSnapshot.getString("player1") ?: ""
+                val player2 = documentSnapshot.getString("player2") ?: ""
+
+                if (player1.isEmpty() || player2.isEmpty()) {
+                    Log.e("FirebaseService", "Os jogadores não estão definidos no documento: player1=$player1, player2=$player2")
+                    onComplete(emptyMap())
+                    return@addOnSuccessListener
+                }
+
+                Log.d("FirebaseService", "Jogadores encontrados: player1=$player1, player2=$player2")
+                Log.d("FirebaseService", "currentPlayer: $currentPlayer")
+
+                val boardPlayer1 = parseBoard(documentSnapshot.get("boardPlayer1") as? List<Map<String, Any>>)
+                val boardPlayer2 = parseBoard(documentSnapshot.get("boardPlayer2") as? List<Map<String, Any>>)
+                val boardTrackingPlayer1 = parseBoard(documentSnapshot.get("boardPlayer1Tracking") as? List<Map<String, Any>>)
+                val boardTrackingPlayer2 = parseBoard(documentSnapshot.get("boardPlayer2Tracking") as? List<Map<String, Any>>)
 
                 val isPlayer1 = currentPlayer == player1
 
-                // Selecionar os tabuleiros corretos
-                val currentPlayerBoardKey = if (isPlayer1) "boardPlayer1Tracking" else "boardPlayer2Tracking"
-                val opponentBoardKey = if (isPlayer1) "boardPlayer2" else "boardPlayer1"
+                val currentPlayerBoard = if (isPlayer1) boardPlayer1 else boardPlayer2
+                val trackingBoard = if (isPlayer1) boardTrackingPlayer1 else boardTrackingPlayer2
+                val opponentBoard = if (isPlayer1) boardPlayer2 else boardPlayer1
 
-                val currentPlayerBoardData = documentSnapshot.get(currentPlayerBoardKey) as? List<Map<String, Any>>
-                val opponentBoardData = documentSnapshot.get(opponentBoardKey) as? List<Map<String, Any>>
+                Log.d("FirebaseService", "Tabuleiro do jogador atual: $currentPlayerBoard")
+                Log.d("FirebaseService", "Tabuleiro de rastreamento: $trackingBoard")
+                Log.d("FirebaseService", "Tabuleiro do oponente: $opponentBoard")
 
-                val currentPlayerBoard = List(8) { row ->
-                    List(8) { col ->
-                        val cell = currentPlayerBoardData?.find { it["row"] == row && it["col"] == col }
-                        CellState.valueOf(cell?.get("state") as? String ?: CellState.EMPTY.name)
-                    }
-                }
-
-                val opponentBoard = List(8) { row ->
-                    List(8) { col ->
-                        val cell = opponentBoardData?.find { it["row"] == row && it["col"] == col }
-                        CellState.valueOf(cell?.get("state") as? String ?: CellState.EMPTY.name)
-                    }
-                }
-
-                // Retornar os dois tabuleiros
                 onComplete(
                     mapOf(
                         "currentPlayerBoard" to currentPlayerBoard,
+                        "trackingBoard" to trackingBoard,
                         "opponentBoard" to opponentBoard
                     )
                 )
             }
             .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao recuperar tabuleiros", e)
-                onComplete(null)
+                Log.e("FirebaseService", "Erro ao carregar os tabuleiros", e)
+                onComplete(emptyMap())
             }
     }
 
-    //Recupera o estado do tabuleiro do Firestore.
-    fun getBoardFromFirebase(gameId: String, onComplete: (List<List<CellState>>?) -> Unit) {
-        db.collection("games").document(gameId)
-            .get()
-            .addOnSuccessListener { documentSnapshot ->
-                val boardData = documentSnapshot.get("boardPlayer1") as? List<Map<String, Any>>
-                val board = List(8) { row ->
-                    List(8) { col ->
-                        val cell = boardData?.find { it["row"] == row && it["col"] == col }
-                        CellState.valueOf(cell?.get("state") as? String ?: CellState.EMPTY.name)
+    fun parseBoard(boardData: List<Map<String, Any>>?): List<List<CellState>> {
+        // Inicializar o tabuleiro vazio
+        val emptyBoard = List(8) { List(8) { CellState.EMPTY } }
+
+        if (boardData == null) {
+            Log.e("FirebaseService", "Os dados do tabuleiro são nulos.")
+            return emptyBoard
+        }
+
+        // Criar uma matriz mutável para atualizar os estados
+        val board = emptyBoard.map { it.toMutableList() }
+
+        boardData.forEach { cell ->
+            try {
+                val row = (cell["row"] as? Long)?.toInt() ?: -1
+                val col = (cell["col"] as? Long)?.toInt() ?: -1
+                val state = cell["state"] as? String ?: CellState.EMPTY.name
+
+                if (row in 0..7 && col in 0..7) {
+                    board[row][col] = CellState.valueOf(state)
+                } else {
+                    Log.e("FirebaseService", "Coordenadas inválidas: row=$row, col=$col")
+                }
+            } catch (e: Exception) {
+                Log.e("FirebaseService", "Erro ao processar célula: $cell", e)
+            }
+        }
+
+        // Log do tabuleiro atualizado
+        board.forEachIndexed { rowIndex, row ->
+            row.forEachIndexed { colIndex, cell ->
+                Log.d("FirebaseService", "Célula [$rowIndex][$colIndex]: $cell")
+            }
+        }
+
+        return board
+    }
+
+    fun updateCellState(
+        boardArray: MutableList<MutableMap<String, Any>>,
+        changes: Map<String, String>
+    ): MutableList<MutableMap<String, Any>> {
+        changes.forEach { (cell, state) ->
+            val (row, col) = cell.split(".").map { it.toInt() }
+
+            // Logs adicionais para verificar os valores
+            Log.d("updateCellState", "Procurando célula: row=$row, col=$col")
+
+            val existingCell = boardArray.find {
+                (it["row"] as? Int ?: (it["row"] as? Long)?.toInt()) == row &&
+                        (it["col"] as? Int ?: (it["col"] as? Long)?.toInt()) == col
+            }
+
+            Log.d("updateCellState", "Encontrada a célula: row=$row, col=$col")
+
+            if (existingCell != null) {
+                // Atualiza o estado da célula existente
+                Log.d("updateCellState", "Atualizando célula existente: row=$row, col=$col, oldState=${existingCell["state"]}, newState=$state")
+                existingCell["state"] = state
+            } else {
+                // Adiciona a célula caso ela não exista
+                Log.d("updateCellState", "Adicionando nova célula: row=$row, col=$col, state=$state")
+                boardArray.add(mutableMapOf("row" to row, "col" to col, "state" to state))
+            }
+        }
+        Log.d("updateCellState", "Tamanho do boardArray após atualizações: ${boardArray.size}")
+        return boardArray
+    }
+
+    fun updateBoards(
+        gameId: String,
+        currentPlayerName: String,
+        trackingBoardChanges: Map<String, String>,
+        opponentBoardChanges: Map<String, String>,
+        onComplete: (Boolean) -> Unit
+    ) {
+        db.collection("games").document(gameId).get()
+            .addOnSuccessListener { gameDocument ->
+                val player1Name = gameDocument.getString("player1") ?: ""
+                val player2Name = gameDocument.getString("player2") ?: ""
+
+                val updates = mutableMapOf<String, Any>()
+
+                // Obtém os arrays existentes do Firestore
+                val boardPlayer1Tracking = (gameDocument["boardPlayer1Tracking"] as? List<Map<String, Any>>)
+                    ?.map { it.toMutableMap() }?.toMutableList() ?: mutableListOf()
+                val boardPlayer2Tracking = (gameDocument["boardPlayer2Tracking"] as? List<Map<String, Any>>)
+                    ?.map { it.toMutableMap() }?.toMutableList() ?: mutableListOf()
+                val boardPlayer1 = (gameDocument["boardPlayer1"] as? List<Map<String, Any>>)
+                    ?.map { it.toMutableMap() }?.toMutableList() ?: mutableListOf()
+                val boardPlayer2 = (gameDocument["boardPlayer2"] as? List<Map<String, Any>>)
+                    ?.map { it.toMutableMap() }?.toMutableList() ?: mutableListOf()
+
+                Log.d("updateBoards", "Tamanho inicial de boardPlayer1Tracking: ${boardPlayer1Tracking.size}")
+                Log.d("updateBoards", "Tamanho inicial de boardPlayer2Tracking: ${boardPlayer2Tracking.size}")
+                Log.d("updateBoards", "Tamanho inicial de boardPlayer1: ${boardPlayer1.size}")
+                Log.d("updateBoards", "Tamanho inicial de boardPlayer2: ${boardPlayer2.size}")
+
+                if (currentPlayerName == player1Name) {
+                    if (trackingBoardChanges.isNotEmpty()) {
+                        val updatedBoard = updateCellState(boardPlayer1Tracking, trackingBoardChanges)
+                        updates["boardPlayer1Tracking"] = updatedBoard
+                    }
+                    if (opponentBoardChanges.isNotEmpty()) {
+                        val updatedBoard = updateCellState(boardPlayer2, opponentBoardChanges)
+                        updates["boardPlayer2"] = updatedBoard
+                    }
+                } else if (currentPlayerName == player2Name) {
+                    if (trackingBoardChanges.isNotEmpty()) {
+                        val updatedBoard = updateCellState(boardPlayer2Tracking, trackingBoardChanges)
+                        updates["boardPlayer2Tracking"] = updatedBoard
+                    }
+                    if (opponentBoardChanges.isNotEmpty()) {
+                        val updatedBoard = updateCellState(boardPlayer1, opponentBoardChanges)
+                        updates["boardPlayer1"] = updatedBoard
                     }
                 }
-                onComplete(board)
+
+                Log.d("updateBoards", "Tamanho final de boardPlayer1Tracking: ${boardPlayer1Tracking.size}")
+                Log.d("updateBoards", "Tamanho final de boardPlayer2Tracking: ${boardPlayer2Tracking.size}")
+                Log.d("updateBoards", "Tamanho final de boardPlayer1: ${boardPlayer1.size}")
+                Log.d("updateBoards", "Tamanho final de boardPlayer2: ${boardPlayer2.size}")
+
+                if (updates.isNotEmpty()) {
+                    db.collection("games").document(gameId)
+                        .set(updates, SetOptions.merge()) // Usa merge para substituir arrays corretamente
+                        .addOnSuccessListener {
+                            Log.d("FirebaseService", "Tabuleiros atualizados com sucesso no Firestore.")
+                            onComplete(true)
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e("FirebaseService", "Erro ao atualizar tabuleiros no Firestore: ", e)
+                            onComplete(false)
+                        }
+                } else {
+                    Log.w("FirebaseService", "Nenhuma mudança detectada nos tabuleiros.")
+                    onComplete(false)
+                }
             }
             .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao recuperar tabuleiro", e)
-                onComplete(null)
+                Log.e("FirebaseService", "Erro ao buscar documento do jogo: ", e)
+                onComplete(false)
             }
     }
 
@@ -377,38 +513,16 @@ object FirebaseService {
             }
     }
 
-    fun saveFormattedBoards(
-        gameId: String,
-        boardPlayer1: List<Map<String, Any>>,
-        boardPlayer2: List<Map<String, Any>>,
-        onComplete: () -> Unit
-    ) {
-        val gameRef = db.collection("games").document(gameId)
 
-        gameRef.update(
-            mapOf(
-                "boardPlayer1" to boardPlayer1,
-                "boardPlayer2" to boardPlayer2
-            )
-        )
-            .addOnSuccessListener {
-                Log.d("FirebaseService", "Tabuleiros salvos com sucesso.")
-                onComplete()
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao salvar tabuleiros", e)
-            }
-    }
-
-    fun updatePlayerStatus(gameId: String, playerStatus: Map<String, String>, onComplete: (Boolean) -> Unit) {
+    fun updatePlayerStatus(gameId: String, player: String, status: String, onComplete: (Boolean) -> Unit) {
         db.collection("games").document(gameId)
-            .update(playerStatus)
+            .update(mapOf("$player.status" to status))
             .addOnSuccessListener {
-                Log.d("FirebaseService", "Status atualizado com sucesso.")
+                Log.d("FirebaseService", "Estado do jogador $player atualizado para $status.")
                 onComplete(true)
             }
             .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao atualizar status", e)
+                Log.e("FirebaseService", "Erro ao atualizar o estado do jogador $player.", e)
                 onComplete(false)
             }
     }
@@ -463,104 +577,53 @@ object FirebaseService {
         }
     }
 
-    //Salva o tabuleiro
-    fun saveBoard(
-        gameId: String,
-        boardPlayer1: List<List<CellState>>,
-        boardPlayer2: List<List<CellState>>,
-        onComplete: () -> Unit
-    ) {
-        val gameRef = db.collection("games").document(gameId)
-
-        gameRef.update(
-            mapOf(
-                "boardPlayer1" to boardPlayer1.map { row -> row.map { it.name } },
-                "boardPlayer2" to boardPlayer2.map { row -> row.map { it.name } }
-            )
-        )
-            .addOnSuccessListener {
-                Log.d("FirebaseService", "Tabuleiros salvos com sucesso.")
-                onComplete()
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao salvar tabuleiros", e)
-            }
-    }
-
-    // Atualiza o tabuleiro do jogo
-    fun saveBoardState(boardPlayer1: List<List<CellState>>, boardPlayer2: List<List<CellState>>) {
-        FirebaseService.getGameId { gameId ->
-            if (gameId != null) {
-                val gameRef = db.collection("games").document(gameId)
-                // Salvar os tabuleiros dos jogadores no Firebase
-                gameRef.update(
-                    "boardPlayer1", boardPlayer1,
-                    "boardPlayer2", boardPlayer2
-                ).addOnSuccessListener {
-                    Log.d("FirebaseService", "Tabuleiro atualizado com sucesso.")
-                }.addOnFailureListener { e ->
-                    Log.e("FirebaseService", "Erro ao atualizar o tabuleiro", e)
-                }
-            } else {
-                Log.e("FirebaseService", "Erro: Nenhum jogo encontrado.")
-            }
-        }
-    }
-
     /**
      * Registra um tiro no tabuleiro e atualiza o estado do jogo.
      */
-    fun registerShot(
-        gameId: String,
-        playerName: String,
-        row: Int,
-        col: Int,
-        onComplete: (Boolean) -> Unit
-    ) {
-        db.collection("games").document(gameId).get()
-            .addOnSuccessListener { document ->
-                val isPlayer1 = document.getString("player1") == playerName
-                val opponentBoardField = if (isPlayer1) "boardPlayer2" else "boardPlayer1"
+    fun registerShot(gameId: String, playerId: String, row: Int, col: Int, onComplete: (Boolean?) -> Unit) {
+        db.collection("games").document(gameId)
+            .get()
+            .addOnSuccessListener { documentSnapshot ->
+                val isPlayer1 = documentSnapshot.getString("player1") == playerId
+                val opponentBoardKey = if (isPlayer1) "boardPlayer2" else "boardPlayer1"
+                val trackingBoardKey = if (isPlayer1) "boardPlayer1Tracking" else "boardPlayer2Tracking"
 
-                val opponentBoard = document.get(opponentBoardField) as? List<Map<String, Any>> ?: emptyList()
+                val opponentBoard = documentSnapshot.get(opponentBoardKey) as? List<Map<String, Any>>
+                val trackingBoard = documentSnapshot.get(trackingBoardKey) as? List<Map<String, Any>>
 
-                // Localizar a célula atingida
-                val updatedBoard = opponentBoard.map { cell ->
-                    if (cell["row"] == row && cell["col"] == col) {
-                        val cellState = cell["state"] as? String ?: CellState.EMPTY.name
-                        if (cellState == CellState.SHIP.name) {
-                            cell + ("state" to CellState.HIT.name) // Marca como HIT
-                        } else {
-                            cell + ("state" to CellState.MISS.name) // Marca como MISS
-                        }
-                    } else {
-                        cell
-                    }
-                }
+                val cell = opponentBoard?.find { it["row"] == row && it["col"] == col }
+                val isHit = cell?.get("state") == CellState.SHIP.name
 
-                // Verificar se o jogo deve terminar
-                val allShipsHit = updatedBoard.none { it["state"] == CellState.SHIP.name }
-                val updates = hashMapOf<String, Any>(
-                    opponentBoardField to updatedBoard
+                val updatedOpponentBoard = opponentBoard?.toMutableList() ?: mutableListOf()
+                val updatedTrackingBoard = trackingBoard?.toMutableList() ?: mutableListOf()
+
+                updatedOpponentBoard.remove(cell)
+                updatedOpponentBoard.add(
+                    mapOf("row" to row, "col" to col, "state" to if (isHit) CellState.HIT.name else CellState.MISS.name)
                 )
 
-                if (allShipsHit) {
-                    updates["status"] = "finished"
-                    updates["winner"] = playerName
-                }
+                updatedTrackingBoard.add(
+                    mapOf("row" to row, "col" to col, "state" to if (isHit) CellState.HIT.name else CellState.MISS.name)
+                )
 
-                // Atualizar o Firestore
                 db.collection("games").document(gameId)
-                    .update(updates)
+                    .update(
+                        mapOf(
+                            opponentBoardKey to updatedOpponentBoard,
+                            trackingBoardKey to updatedTrackingBoard
+                        )
+                    )
                     .addOnSuccessListener {
-                        onComplete(true)
+                        onComplete(isHit)
                     }
-                    .addOnFailureListener {
-                        onComplete(false)
+                    .addOnFailureListener { e ->
+                        Log.e("FirebaseService", "Erro ao registrar tiro", e)
+                        onComplete(null)
                     }
             }
-            .addOnFailureListener {
-                onComplete(false)
+            .addOnFailureListener { e ->
+                Log.e("FirebaseService", "Erro ao recuperar estado do jogo", e)
+                onComplete(null)
             }
     }
 
@@ -597,7 +660,7 @@ object FirebaseService {
     /**
      * Alterna o turno entre os jogadores.
      */
-    private fun switchTurn(gameId: String, isPlayer1: Boolean, onComplete: (Boolean) -> Unit) {
+    fun switchTurn(gameId: String, isPlayer1: Boolean, onComplete: (Boolean) -> Unit) {
         val currentPlayerField = if (isPlayer1) "player1Status" else "player2Status"
         val opponentPlayerField = if (isPlayer1) "player2Status" else "player1Status"
 
@@ -652,6 +715,47 @@ object FirebaseService {
             .addOnFailureListener { e ->
                 Log.e("FirebaseService", "Erro ao buscar nome do oponente", e)
                 onComplete(null)
+            }
+    }
+
+    fun isGameFinished(gameId: String, onComplete: (Boolean, String?) -> Unit) {
+        db.collection("games").document(gameId)
+            .get()
+            .addOnSuccessListener { documentSnapshot ->
+                val boardPlayer1 = documentSnapshot.get("boardPlayer1") as? List<Map<String, Any>>
+                val boardPlayer2 = documentSnapshot.get("boardPlayer2") as? List<Map<String, Any>>
+
+                val player1ShipsRemaining = boardPlayer1?.any { cell ->
+                    cell["state"] == CellState.SHIP.name
+                } ?: false
+
+                val player2ShipsRemaining = boardPlayer2?.any { cell ->
+                    cell["state"] == CellState.SHIP.name
+                } ?: false
+
+                when {
+                    !player1ShipsRemaining -> onComplete(true, "player2") // Player 2 vence
+                    !player2ShipsRemaining -> onComplete(true, "player1") // Player 1 vence
+                    else -> onComplete(false, null) // Jogo continua
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("FirebaseService", "Erro ao verificar estado do jogo", e)
+                onComplete(false, null)
+            }
+    }
+
+    fun finishGame(gameId: String, winner: String?, onComplete: () -> Unit) {
+        db.collection("games").document(gameId)
+            .update(
+                mapOf(
+                    "status" to "finished",
+                    "winner" to winner
+                )
+            )
+            .addOnSuccessListener { onComplete() }
+            .addOnFailureListener { e ->
+                Log.e("FirebaseService", "Erro ao finalizar o jogo", e)
             }
     }
 
