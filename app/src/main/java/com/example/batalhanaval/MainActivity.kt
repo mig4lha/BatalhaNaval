@@ -80,13 +80,13 @@ class MainActivity : ComponentActivity() {
 
                     composable("game_setup/{gameId}/{currentPlayer}") { backStackEntry ->
                         val gameId = backStackEntry.arguments?.getString("gameId") ?: ""
-                        val currentPlayer = backStackEntry.arguments?.getString("currentPlayer") ?: "Jogador1"
+                        val currentPlayer = backStackEntry.arguments?.getString("currentPlayer") ?: ""
 
                         GameSetupScreen(
                             gameId = gameId,
                             currentPlayer = currentPlayer,
                             onWaitForOpponent = {
-                                navController.navigate("wait_for_opponent/$currentPlayer") {
+                                navController.navigate("wait_for_opponent/$gameId/$currentPlayer") {
                                     launchSingleTop = true
                                 }
                             },
@@ -98,10 +98,13 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    composable("wait_for_opponent/{playerName}") { backStackEntry ->
-                        val playerName = backStackEntry.arguments?.getString("playerName") ?: "Jogador1"
+                    composable("wait_for_opponent/{gameId}/{currentPlayerId}") { backStackEntry ->
+                        val gameId = backStackEntry.arguments?.getString("gameId") ?: ""
+                        val currentPlayerId = backStackEntry.arguments?.getString("currentPlayerId") ?: ""
+
                         WaitForOpponentScreen(
-                            playerName = playerName,
+                            gameId = gameId,
+                            currentPlayer = currentPlayerId,
                             onBackToMenu = { returnedPlayerName ->
                                 navController.navigate("main_menu/$returnedPlayerName") {
                                     popUpTo("main_menu/$returnedPlayerName") { inclusive = true }
@@ -123,7 +126,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             navigateToWaitOpponentScreen = {
-                                navController.navigate("wait_opponent_screen/$gameId/$currentPlayerId") {
+                                navController.navigate("wait_for_opponent/$gameId/$currentPlayerId") { // Corrigido para usar currentPlayerId
                                     popUpTo("game_screen/$gameId/$currentPlayerId") { inclusive = false }
                                 }
                             }

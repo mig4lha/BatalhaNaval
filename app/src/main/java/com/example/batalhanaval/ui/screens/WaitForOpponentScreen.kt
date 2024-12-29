@@ -14,7 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun WaitForOpponentScreen(playerName: String, onBackToMenu: (String) -> Unit) {
+fun WaitForOpponentScreen(
+    gameId: String,
+    currentPlayer: String,
+    onBackToMenu: (String) -> Unit
+){
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.Center,
@@ -24,7 +28,7 @@ fun WaitForOpponentScreen(playerName: String, onBackToMenu: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(onClick = { onBackToMenu(playerName) }, modifier = Modifier.padding(top = 16.dp)) {
+        Button(onClick = { onBackToMenu(currentPlayer) }, modifier = Modifier.padding(top = 16.dp)) {
             Text("Voltar ao Menu Principal")
         }
     }

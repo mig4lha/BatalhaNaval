@@ -514,15 +514,43 @@ object FirebaseService {
     }
 
 
-    fun updatePlayerStatus(gameId: String, player: String, status: String, onComplete: (Boolean) -> Unit) {
-        db.collection("games").document(gameId)
-            .update(mapOf("$player.status" to status))
-            .addOnSuccessListener {
-                Log.d("FirebaseService", "Estado do jogador $player atualizado para $status.")
-                onComplete(true)
+    fun updatePlayerStates(
+        gameId: String,
+        currentPlayerName: String,
+        onComplete: (Boolean) -> Unit
+    ) {
+        db.collection("games").document(gameId).get()
+            .addOnSuccessListener { gameDocument ->
+                val player1Name = gameDocument.getString("player1") ?: ""
+                val player2Name = gameDocument.getString("player2") ?: ""
+                val currentTurn = gameDocument.getLong("turn") ?: 0
+
+                val updates = mutableMapOf<String, Any>()
+
+                if (currentPlayerName == player1Name) {
+                    updates["player1Status"] = "wait"
+                    updates["player2Status"] = "playing"
+                } else if (currentPlayerName == player2Name) {
+                    updates["player1Status"] = "playing"
+                    updates["player2Status"] = "wait"
+                }
+
+                // Incrementa o turno
+                updates["turn"] = currentTurn + 1
+
+                db.collection("games").document(gameId)
+                    .update(updates)
+                    .addOnSuccessListener {
+                        Log.d("FirebaseService", "Estados dos jogadores e turno atualizados com sucesso.")
+                        onComplete(true)
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("FirebaseService", "Erro ao atualizar estados dos jogadores e turno: ", e)
+                        onComplete(false)
+                    }
             }
             .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao atualizar o estado do jogador $player.", e)
+                Log.e("FirebaseService", "Erro ao buscar documento do jogo: ", e)
                 onComplete(false)
             }
     }

@@ -22,18 +22,26 @@ fun GameScreen(
     gameId: String,
     currentPlayer: String,
     onGameEnd: () -> Unit,
-    navigateToWaitOpponentScreen: () -> Unit, // Callback para navegar para a tela de espera
+    navigateToWaitOpponentScreen: () -> Unit,
     viewModel: GameScreenViewModel = viewModel()
-) {
+)  {
     val playerBoard = viewModel.playerBoard.collectAsState().value
     val trackingBoard = viewModel.trackingBoard.collectAsState().value
     val currentPlayerState = viewModel.currentPlayerState.collectAsState().value
     val opponentName = viewModel.opponentName.collectAsState().value
 
-    // Inicializa o ViewModel ao abrir a tela
     LaunchedEffect(Unit) {
         Log.d("GameScreen", "Chamando initialize com gameId: $gameId e currentPlayer: $currentPlayer")
         viewModel.initialize(gameId, currentPlayer)
+    }
+
+    val shouldNavigate = viewModel.shouldNavigateToWaitOpponent.collectAsState().value
+
+    LaunchedEffect(shouldNavigate) {
+        if (shouldNavigate) {
+            navigateToWaitOpponentScreen()
+            viewModel.resetNavigationState()
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -69,7 +77,6 @@ fun GameScreen(
         trackingBoard.forEachIndexed { rowIndex, row ->
             Row {
                 row.forEachIndexed { colIndex, cell ->
-
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -80,38 +87,28 @@ fun GameScreen(
                                     currentPlayer = currentPlayer,
                                     row = rowIndex,
                                     col = colIndex,
+                                    onNavigateToWaitOpponent = {
+                                        navigateToWaitOpponentScreen()
+                                    },
                                     onShotComplete = { isGameFinished ->
                                         if (isGameFinished) {
-                                            onGameEnd() // Navega para o fim do jogo
-                                        } else {
-                                            // Verifica o estado atual e navega conforme necessário
-                                            if (currentPlayerState == "waiting") {
-                                                navigateToWaitOpponentScreen()
-                                            }
+                                            onGameEnd()
                                         }
                                     }
                                 )
+
                             }
                             .background(
                                 when (cell) {
                                     CellState.EMPTY -> Color.LightGray
                                     CellState.HIT -> Color.Red
-                                    CellState.MISS -> Color.Black
+                                    CellState.MISS -> Color.Blue
                                     else -> Color.Transparent
                                 }
                             )
                     )
                 }
             }
-        }
-
-        if (currentPlayerState == "waiting") {
-            Text(
-                text = "Aguardando a jogada do adversário...",
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 16.dp)
-            )
         }
     }
 }

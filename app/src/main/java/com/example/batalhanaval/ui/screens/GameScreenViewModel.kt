@@ -25,6 +25,16 @@ class GameScreenViewModel : ViewModel() {
 
     private var opponentBoard: List<List<CellState>> = emptyList()
 
+    private val _shouldNavigateToWaitOpponent = MutableStateFlow(false)
+    val shouldNavigateToWaitOpponent: StateFlow<Boolean> = _shouldNavigateToWaitOpponent
+
+    fun triggerWaitOpponentNavigation() {
+        _shouldNavigateToWaitOpponent.value = true
+    }
+
+    fun resetNavigationState() {
+        _shouldNavigateToWaitOpponent.value = false
+    }
 
     fun loadGameBoards(gameId: String, currentPlayer: String) {
         viewModelScope.launch {
@@ -47,6 +57,7 @@ class GameScreenViewModel : ViewModel() {
         currentPlayer: String,
         row: Int,
         col: Int,
+        onNavigateToWaitOpponent: () -> Unit,
         onShotComplete: (Boolean) -> Unit
     ) {
         FirebaseService.getGameBoards(gameId, currentPlayer) { boards ->
@@ -90,7 +101,8 @@ class GameScreenViewModel : ViewModel() {
                         ) { success ->
                             if (success) {
                                 Log.d("RegisterShot", "HIT atualizado com sucesso.")
-                                onShotComplete(true) // Jogador continua
+                                // Permanece na tela do jogo
+                                onShotComplete(true)
                             } else {
                                 Log.e("RegisterShot", "Erro ao atualizar boards após HIT.")
                                 onShotComplete(false)
@@ -113,19 +125,16 @@ class GameScreenViewModel : ViewModel() {
                             opponentBoardChanges
                         ) { success ->
                             if (success) {
-                                Log.d("RegisterShot", "MISS atualizado com sucesso.")
-                                FirebaseService.updateTurn(
-                                    gameId,
-                                    getNextTurn(currentPlayer, boards["player1"] as String, boards["player2"] as String)
-                                ) { turnUpdated ->
-                                    if (turnUpdated) {
-                                        Log.d("RegisterShot", "Turno atualizado após MISS.")
-                                        onShotComplete(false)
+                                FirebaseService.updatePlayerStates(gameId, currentPlayer) { stateUpdated ->
+                                    if (stateUpdated) {
+                                        Log.d("RegisterShot", "Estados atualizados após MISS.")
+                                        // Navega para a tela de espera
+                                        onNavigateToWaitOpponent()
                                     } else {
-                                        Log.e("RegisterShot", "Erro ao atualizar turno.")
-                                        onShotComplete(false)
+                                        Log.e("RegisterShot", "Erro ao atualizar estados dos jogadores.")
                                     }
                                 }
+                                onShotComplete(false)
                             } else {
                                 Log.e("RegisterShot", "Erro ao atualizar boards após MISS.")
                                 onShotComplete(false)
@@ -148,36 +157,35 @@ class GameScreenViewModel : ViewModel() {
         return if (currentPlayer == player1Id) 2 else 1
     }
 
-    private fun convertToMutableCellStateBoard(data: Any?): MutableList<MutableList<CellState>>? {
-        return (data as? List<*>)?.mapNotNull { row ->
-            (row as? List<*>)?.mapNotNull { cell ->
-                try {
-                    CellState.valueOf(cell as String)
-                } catch (e: Exception) {
-                    Log.e("ConvertToMutableCellStateBoard", "Erro ao converter célula: $cell")
-                    null
-                }
-            }?.toMutableList()
-        }?.toMutableList()
+    fun updateGameStateForHit() {
+        Log.d("GameSetupViewModel", "HIT processado. Jogador continua.")
+        // Se necessário, pode adicionar lógica adicional aqui
     }
 
-    /*private fun updateBoardsAndContinue(
-        gameId: String,
+    fun handleShotResult(
+        result: String,
         currentPlayer: String,
-        trackingBoard: List<List<CellState>>,
-        opponentBoard: List<List<CellState>>,
-        onShotComplete: (Boolean) -> Unit
+        gameId: String,
+        onNavigateToWaitOpponent: () -> Unit
     ) {
-        FirebaseService.updateBoards(gameId, currentPlayer, trackingBoard, opponentBoard) { success ->
-            if (success) {
-                Log.d("UpdateBoards", "Boards atualizados com sucesso.")
-                onShotComplete(true)
-            } else {
-                Log.e("UpdateBoards", "Erro ao atualizar boards.")
-                onShotComplete(false)
-            }
+        if (result == "HIT") {
+            // Permanece na GameScreen
+            Log.d("GameScreenViewModel", "HIT! O jogador continua jogando.")
+        } else if (result == "MISS") {
+            // Atualiza o estado dos jogadores e navega para WaitOpponent
+            FirebaseService.updatePlayerStates(
+                gameId = gameId,
+                currentPlayerName = currentPlayer,
+                onComplete = { success ->
+                    if (success) {
+                        onNavigateToWaitOpponent()
+                    } else {
+                        Log.e("GameScreenViewModel", "Erro ao atualizar os estados dos jogadores.")
+                    }
+                }
+            )
         }
-    }*/
+    }
 
     fun initialize(gameId: String, currentPlayer: String) {
         Log.d("GameScreenViewModel", "Inicializando com gameId: $gameId e currentPlayer: $currentPlayer")
