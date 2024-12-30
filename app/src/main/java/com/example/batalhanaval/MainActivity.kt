@@ -149,10 +149,7 @@ class MainActivity : ComponentActivity() {
 
                     composable("leaderboard") {
                         LeaderboardScreen(
-                            scores = listOf(
-                                ScoreItem("Player1", 100),
-                                ScoreItem("Player2", 90)
-                            )
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }

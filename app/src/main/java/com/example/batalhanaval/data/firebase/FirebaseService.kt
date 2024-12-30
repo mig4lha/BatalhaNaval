@@ -547,36 +547,6 @@ object FirebaseService {
             }
     }
 
-    /**
-     * Verifica se o jogo terminou.
-     */
-    private fun checkGameOver(gameId: String, onComplete: (Boolean) -> Unit) {
-        db.collection("games").document(gameId).get()
-            .addOnSuccessListener { document ->
-                val boardPlayer1 = document.get("boardPlayer1") as? List<Map<String, Any>> ?: emptyList()
-                val boardPlayer2 = document.get("boardPlayer2") as? List<Map<String, Any>> ?: emptyList()
-
-                val player1ShipsRemaining = boardPlayer1.count { it["state"] == CellState.SHIP.name }
-                val player2ShipsRemaining = boardPlayer2.count { it["state"] == CellState.SHIP.name }
-
-                if (player1ShipsRemaining == 0 || player2ShipsRemaining == 0) {
-                    val winner = if (player1ShipsRemaining > 0) document.getString("player1") else document.getString("player2")
-                    val loser = if (player1ShipsRemaining > 0) document.getString("player2") else document.getString("player1")
-                    val turns = document.getLong("turn")?.toInt() ?: 0
-
-                    db.collection("games").document(gameId).update("status", "finished")
-                    db.collection("games").document(gameId).update("winner", winner, "loser", loser)
-                    saveScore(winner ?: "", turns)
-                    onComplete(true)
-                } else {
-                    onComplete(false)
-                }
-            }
-            .addOnFailureListener {
-                onComplete(false)
-            }
-    }
-
     fun getPlayerState(gameId: String, currentPlayer: String, onComplete: (String?) -> Unit) {
         db.collection("games").document(gameId)
             .get()
@@ -625,18 +595,23 @@ object FirebaseService {
     ) {
         val gameRef = db.collection("games").document(gameId)
 
-        // Atualiza o status do jogo e identifica vencedor/perdedor
         gameRef.get().addOnSuccessListener { document ->
             val player1 = document.getString("player1") ?: return@addOnSuccessListener
             val player2 = document.getString("player2") ?: return@addOnSuccessListener
-            val turnCount = document.getLong("turn")?.toInt() ?: 0 // Usa o campo `turn` existente
+            val turnCount = document.getLong("turn")?.toInt() ?: 0
+
+            // Obtém o timestamp como número
+            val timestamp = document.getLong("timestamp") ?: run {
+                Log.e("FirebaseService", "Campo 'timestamp' ausente ou inválido.")
+                onComplete(false)
+                return@addOnSuccessListener
+            }
 
             val updates = mutableMapOf<String, Any>(
-                "Status" to "finished",
+                "status" to "finished",
                 "winner" to winner
             )
 
-            // Atualiza os status dos jogadores
             if (winner == player1) {
                 updates["player1Status"] = "winner"
                 updates["player2Status"] = "looser"
@@ -645,23 +620,40 @@ object FirebaseService {
                 updates["player2Status"] = "winner"
             }
 
-            // Atualiza o Firestore
+            // Atualiza o status do jogo no Firestore
             gameRef.update(updates).addOnSuccessListener {
                 Log.d("FirebaseService", "Jogo finalizado com sucesso.")
 
-                // Adiciona o vencedor ao leaderboard
+                // Verifica se já existe uma entrada no leaderboard com o mesmo vencedor e timestamp
                 val leaderboardRef = db.collection("leaderboard")
-                val leaderboardEntry = mapOf(
-                    "name" to winner,
-                    "score" to turnCount
-                )
-                leaderboardRef.add(leaderboardEntry).addOnSuccessListener {
-                    Log.d("FirebaseService", "Leaderboard atualizado com sucesso.")
-                    onComplete(true)
-                }.addOnFailureListener { e ->
-                    Log.e("FirebaseService", "Erro ao atualizar leaderboard.", e)
-                    onComplete(false)
-                }
+                leaderboardRef
+                    .whereEqualTo("name", winner)
+                    .whereEqualTo("timestamp", timestamp)
+                    .get()
+                    .addOnSuccessListener { querySnapshot ->
+                        if (querySnapshot.isEmpty) {
+                            // Adiciona a entrada ao leaderboard se não existir duplicado
+                            val leaderboardEntry = mapOf(
+                                "name" to winner,
+                                "score" to turnCount,
+                                "timestamp" to timestamp // Adiciona o timestamp como número
+                            )
+                            leaderboardRef.add(leaderboardEntry).addOnSuccessListener {
+                                Log.d("FirebaseService", "Leaderboard atualizado com sucesso.")
+                                onComplete(true)
+                            }.addOnFailureListener { e ->
+                                Log.e("FirebaseService", "Erro ao atualizar leaderboard.", e)
+                                onComplete(false)
+                            }
+                        } else {
+                            Log.d("FirebaseService", "Entrada duplicada detectada no leaderboard. Nenhuma ação necessária.")
+                            onComplete(true)
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("FirebaseService", "Erro ao verificar duplicados no leaderboard.", e)
+                        onComplete(false)
+                    }
             }.addOnFailureListener { e ->
                 Log.e("FirebaseService", "Erro ao finalizar jogo.", e)
                 onComplete(false)
@@ -670,58 +662,6 @@ object FirebaseService {
             Log.e("FirebaseService", "Erro ao buscar jogo.", e)
             onComplete(false)
         }
-    }
-
-    fun isGameFinished(gameId: String, onComplete: (Boolean, String?) -> Unit) {
-        db.collection("games").document(gameId)
-            .get()
-            .addOnSuccessListener { documentSnapshot ->
-                val boardPlayer1 = documentSnapshot.get("boardPlayer1") as? List<Map<String, Any>>
-                val boardPlayer2 = documentSnapshot.get("boardPlayer2") as? List<Map<String, Any>>
-
-                val player1ShipsRemaining = boardPlayer1?.any { cell ->
-                    cell["state"] == CellState.SHIP.name
-                } ?: false
-
-                val player2ShipsRemaining = boardPlayer2?.any { cell ->
-                    cell["state"] == CellState.SHIP.name
-                } ?: false
-
-                when {
-                    !player1ShipsRemaining -> onComplete(true, "player2") // Player 2 vence
-                    !player2ShipsRemaining -> onComplete(true, "player1") // Player 1 vence
-                    else -> onComplete(false, null) // Jogo continua
-                }
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao verificar estado do jogo", e)
-                onComplete(false, null)
-            }
-    }
-
-    fun finishGame(gameId: String, winner: String?, onComplete: () -> Unit) {
-        db.collection("games").document(gameId)
-            .update(
-                mapOf(
-                    "status" to "finished",
-                    "winner" to winner
-                )
-            )
-            .addOnSuccessListener { onComplete() }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao finalizar o jogo", e)
-            }
-    }
-
-    /**
-     * Salva o score no leaderboard.
-     */
-    private fun saveScore(playerName: String, score: Int) {
-        val leaderboardEntry = mapOf(
-            "playerName" to playerName,
-            "score" to score
-        )
-        db.collection("leaderboard").add(leaderboardEntry)
     }
 
     //Salva o score
@@ -750,10 +690,10 @@ object FirebaseService {
             .addOnSuccessListener { querySnapshot ->
                 val list = querySnapshot.documents.mapNotNull { doc ->
                     val score = doc.getLong("score")?.toInt()
-                    val playerId = doc.getString("playerId")
+                    val playerName = doc.getString("name") // Corrigido para o campo correto
                     // Só adiciona na lista se os campos estiverem corretos
-                    if (score != null && playerId != null) {
-                        ScoreItem(playerId, score)
+                    if (score != null && playerName != null) {
+                        ScoreItem(playerName, score) // Use o nome do jogador em vez de playerId
                     } else {
                         null
                     }
