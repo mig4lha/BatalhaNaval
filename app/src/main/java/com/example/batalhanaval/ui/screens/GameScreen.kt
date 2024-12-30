@@ -44,69 +44,107 @@ fun GameScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    val shouldRefreshBoards = viewModel.shouldRefreshBoards.collectAsState().value
+
+    LaunchedEffect(shouldRefreshBoards) {
+        if (shouldRefreshBoards) {
+            viewModel.refreshBoards(gameId, currentPlayer)
+            viewModel.resetRefreshState() // Reseta o estado para evitar loops infinitos
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Informações sobre o jogador atual e o adversário
         Text(
             text = "Jogador Atual: $currentPlayer | Adversário: ${opponentName ?: "Carregando..."}",
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
+        // Tabuleiro do jogador
         Text("Seu Tabuleiro:")
-        playerBoard.forEach { row ->
-            Row {
-                row.forEach { cell ->
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .border(1.dp, Color.Black)
-                            .background(
-                                when (cell) {
-                                    CellState.EMPTY -> Color.LightGray
-                                    CellState.SHIP -> Color.DarkGray
-                                    CellState.HIT -> Color.Red
-                                    CellState.MISS -> Color.Black
-                                }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                playerBoard.forEach { row ->
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        row.forEach { cell ->
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .border(1.dp, Color.Black)
+                                    .background(
+                                        when (cell) {
+                                            CellState.EMPTY -> Color.LightGray
+                                            CellState.SHIP -> Color.DarkGray
+                                            CellState.HIT -> Color.Red
+                                            CellState.MISS -> Color.Black
+                                        }
+                                    )
                             )
-                    )
+                        }
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
+        // Tabuleiro de tracking
         Text("Tabuleiro de Rastreamento:")
-        trackingBoard.forEachIndexed { rowIndex, row ->
-            Row {
-                row.forEachIndexed { colIndex, cell ->
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .border(1.dp, Color.Black)
-                            .clickable(enabled = currentPlayerState == "playing" && cell == CellState.EMPTY) {
-                                viewModel.registerShot(
-                                    gameId = gameId,
-                                    currentPlayer = currentPlayer,
-                                    row = rowIndex,
-                                    col = colIndex,
-                                    onNavigateToWaitOpponent = {
-                                        navigateToWaitOpponentScreen()
-                                    },
-                                    onShotComplete = { isGameFinished ->
-                                        if (isGameFinished) {
-                                            onGameEnd()
-                                        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                trackingBoard.forEachIndexed { rowIndex, row ->
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        row.forEachIndexed { colIndex, cell ->
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .border(1.dp, Color.Black)
+                                    .clickable(enabled = currentPlayerState == "playing" && cell == CellState.EMPTY) {
+                                        viewModel.registerShot(
+                                            gameId = gameId,
+                                            currentPlayer = currentPlayer,
+                                            row = rowIndex,
+                                            col = colIndex,
+                                            onShotComplete = { isGameFinished ->
+                                                if (isGameFinished) {
+                                                    onGameEnd() // Finaliza o jogo
+                                                } else {
+                                                    viewModel.refreshBoards(gameId, currentPlayer)
+                                                }
+                                            },
+                                            onNavigateToWaitOpponent = navigateToWaitOpponentScreen
+                                        )
                                     }
-                                )
-
-                            }
-                            .background(
-                                when (cell) {
-                                    CellState.EMPTY -> Color.LightGray
-                                    CellState.HIT -> Color.Red
-                                    CellState.MISS -> Color.Blue
-                                    else -> Color.Transparent
-                                }
+                                    .background(
+                                        when (cell) {
+                                            CellState.EMPTY -> Color.LightGray
+                                            CellState.HIT -> Color.Red
+                                            CellState.MISS -> Color.Black
+                                            else -> Color.Transparent
+                                        }
+                                    )
                             )
-                    )
+                        }
+                    }
                 }
             }
         }

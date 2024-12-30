@@ -6,7 +6,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.example.batalhanaval.data.model.ScoreItem
 import com.example.batalhanaval.ui.components.CellState
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 
 object FirebaseService {
@@ -19,13 +18,6 @@ object FirebaseService {
     // Instância do Firestore
     private val db: FirebaseFirestore by lazy {
         FirebaseFirestore.getInstance()
-    }
-
-     //Cria um tabuleiro vazio
-    fun createEmptyBoard(): List<List<CellState>> {
-        return List(8) {
-            List(8) { CellState.EMPTY }
-        }
     }
 
      //Faz login anônimo no Firebase
@@ -555,106 +547,6 @@ object FirebaseService {
             }
     }
 
-    //Estado do Jogo no Firebase
-    fun updateTurn(gameId: String, nextTurn: Int, onComplete: (Boolean) -> Unit) {
-        db.collection("games").document(gameId)
-            .update("turn", nextTurn)
-            .addOnSuccessListener {
-                Log.d("FirebaseService", "Turno atualizado com sucesso")
-                onComplete(true)
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao atualizar o turno", e)
-                onComplete(false)
-            }
-    }
-
-    //Verificar o Turno Atual
-    fun getTurn(gameId: String, onComplete: (Int?) -> Unit) {
-        db.collection("games").document(gameId)
-            .get()
-            .addOnSuccessListener { documentSnapshot ->
-                val turn = documentSnapshot.getLong("turn")?.toInt()
-                onComplete(turn)
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao obter o turno atual", e)
-                onComplete(null)
-            }
-    }
-
-    //verificar e atualizar o estado do jogo
-    fun makeMove(gameId: String, playerId: String, row: Int, col: Int, onComplete: (Boolean) -> Unit) {
-        getTurn(gameId) { turn ->
-            if (turn != null) {
-                if ((turn % 2 == 1 && playerId == "player1Id") || (turn % 2 == 0 && playerId == "player2Id")) {
-                    // Lógica para atualizar o tabuleiro com a jogada do jogador
-                    val boardField = if (playerId == "player1Id") "boardPlayer1" else "boardPlayer2"
-                    val gameRef = db.collection("games").document(gameId)
-
-                    gameRef.update(boardField, listOf(mapOf("row" to row, "col" to col, "state" to CellState.HIT.name))) // Simples exemplo
-
-                    // Atualizar o turno
-                    updateTurn(gameId, turn + 1) { success ->
-                        onComplete(success)
-                    }
-                } else {
-                    onComplete(false) // Não é o turno do jogador
-                }
-            }
-        }
-    }
-
-    /**
-     * Registra um tiro no tabuleiro e atualiza o estado do jogo.
-     */
-    fun registerShot(gameId: String, playerId: String, row: Int, col: Int, onComplete: (Boolean?) -> Unit) {
-        db.collection("games").document(gameId)
-            .get()
-            .addOnSuccessListener { documentSnapshot ->
-                val isPlayer1 = documentSnapshot.getString("player1") == playerId
-                val opponentBoardKey = if (isPlayer1) "boardPlayer2" else "boardPlayer1"
-                val trackingBoardKey = if (isPlayer1) "boardPlayer1Tracking" else "boardPlayer2Tracking"
-
-                val opponentBoard = documentSnapshot.get(opponentBoardKey) as? List<Map<String, Any>>
-                val trackingBoard = documentSnapshot.get(trackingBoardKey) as? List<Map<String, Any>>
-
-                val cell = opponentBoard?.find { it["row"] == row && it["col"] == col }
-                val isHit = cell?.get("state") == CellState.SHIP.name
-
-                val updatedOpponentBoard = opponentBoard?.toMutableList() ?: mutableListOf()
-                val updatedTrackingBoard = trackingBoard?.toMutableList() ?: mutableListOf()
-
-                updatedOpponentBoard.remove(cell)
-                updatedOpponentBoard.add(
-                    mapOf("row" to row, "col" to col, "state" to if (isHit) CellState.HIT.name else CellState.MISS.name)
-                )
-
-                updatedTrackingBoard.add(
-                    mapOf("row" to row, "col" to col, "state" to if (isHit) CellState.HIT.name else CellState.MISS.name)
-                )
-
-                db.collection("games").document(gameId)
-                    .update(
-                        mapOf(
-                            opponentBoardKey to updatedOpponentBoard,
-                            trackingBoardKey to updatedTrackingBoard
-                        )
-                    )
-                    .addOnSuccessListener {
-                        onComplete(isHit)
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("FirebaseService", "Erro ao registrar tiro", e)
-                        onComplete(null)
-                    }
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao recuperar estado do jogo", e)
-                onComplete(null)
-            }
-    }
-
     /**
      * Verifica se o jogo terminou.
      */
@@ -683,26 +575,6 @@ object FirebaseService {
             .addOnFailureListener {
                 onComplete(false)
             }
-    }
-
-    /**
-     * Alterna o turno entre os jogadores.
-     */
-    fun switchTurn(gameId: String, isPlayer1: Boolean, onComplete: (Boolean) -> Unit) {
-        val currentPlayerField = if (isPlayer1) "player1Status" else "player2Status"
-        val opponentPlayerField = if (isPlayer1) "player2Status" else "player1Status"
-
-        db.collection("games").document(gameId).update(
-            mapOf(
-                currentPlayerField to "wait",
-                opponentPlayerField to "playing",
-                "turn" to FirebaseFirestore.getInstance().collection("games").document(gameId).get().result?.getLong("turn")?.plus(1)
-            )
-        ).addOnSuccessListener {
-            onComplete(true)
-        }.addOnFailureListener {
-            onComplete(false)
-        }
     }
 
     fun getPlayerState(gameId: String, currentPlayer: String, onComplete: (String?) -> Unit) {

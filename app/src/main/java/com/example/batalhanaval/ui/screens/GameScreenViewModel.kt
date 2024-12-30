@@ -28,6 +28,17 @@ class GameScreenViewModel : ViewModel() {
     private val _shouldNavigateToWaitOpponent = MutableStateFlow(false)
     val shouldNavigateToWaitOpponent: StateFlow<Boolean> = _shouldNavigateToWaitOpponent
 
+    private val _shouldRefreshBoards = MutableStateFlow(false)
+    val shouldRefreshBoards: StateFlow<Boolean> = _shouldRefreshBoards
+
+    fun triggerRefreshBoards() {
+        _shouldRefreshBoards.value = true
+    }
+
+    fun resetRefreshState() {
+        _shouldRefreshBoards.value = false
+    }
+
     fun triggerWaitOpponentNavigation() {
         _shouldNavigateToWaitOpponent.value = true
     }
@@ -82,14 +93,12 @@ class GameScreenViewModel : ViewModel() {
             try {
                 val cellState = opponentBoard[row][col] // Obtém o estado diretamente
 
-                // Verifica se a célula é válida
                 when (cellState) {
                     CellState.SHIP -> {
                         Log.d("RegisterShot", "HIT na célula [$row][$col].")
                         trackingBoard[row][col] = CellState.HIT
                         opponentBoard[row][col] = CellState.HIT
 
-                        // Atualiza os campos modificados
                         val trackingBoardChanges = mapOf("$row.$col" to CellState.HIT.name)
                         val opponentBoardChanges = mapOf("$row.$col" to CellState.HIT.name)
 
@@ -100,9 +109,8 @@ class GameScreenViewModel : ViewModel() {
                             opponentBoardChanges
                         ) { success ->
                             if (success) {
-                                Log.d("RegisterShot", "HIT atualizado com sucesso.")
-                                // Permanece na tela do jogo
-                                onShotComplete(true)
+                                Log.d("RegisterShot", "HIT atualizado com sucesso. Permanecendo na tela.")
+                                onShotComplete(false) // Não navega; permanece no GameScreen.
                             } else {
                                 Log.e("RegisterShot", "Erro ao atualizar boards após HIT.")
                                 onShotComplete(false)
@@ -114,7 +122,6 @@ class GameScreenViewModel : ViewModel() {
                         trackingBoard[row][col] = CellState.MISS
                         opponentBoard[row][col] = CellState.MISS
 
-                        // Atualiza os campos modificados
                         val trackingBoardChanges = mapOf("$row.$col" to CellState.MISS.name)
                         val opponentBoardChanges = mapOf("$row.$col" to CellState.MISS.name)
 
@@ -127,14 +134,13 @@ class GameScreenViewModel : ViewModel() {
                             if (success) {
                                 FirebaseService.updatePlayerStates(gameId, currentPlayer) { stateUpdated ->
                                     if (stateUpdated) {
-                                        Log.d("RegisterShot", "Estados atualizados após MISS.")
-                                        // Navega para a tela de espera
-                                        onNavigateToWaitOpponent()
+                                        Log.d("RegisterShot", "Estados atualizados após MISS. Navegando para espera.")
+                                        onNavigateToWaitOpponent() // Navega para a tela de espera.
                                     } else {
                                         Log.e("RegisterShot", "Erro ao atualizar estados dos jogadores.")
+                                        onShotComplete(false)
                                     }
                                 }
-                                onShotComplete(false)
                             } else {
                                 Log.e("RegisterShot", "Erro ao atualizar boards após MISS.")
                                 onShotComplete(false)
@@ -153,37 +159,26 @@ class GameScreenViewModel : ViewModel() {
         }
     }
 
-    private fun getNextTurn(currentPlayer: String, player1Id: String, player2Id: String): Int {
-        return if (currentPlayer == player1Id) 2 else 1
-    }
+    fun refreshBoards(gameId: String, currentPlayer: String) {
+        FirebaseService.getGameBoards(gameId, currentPlayer) { boards ->
+            if (boards.isNotEmpty()) {
+                val playerBoard = boards["playerBoard"]?.map { it.toMutableList() }
+                val trackingBoard = boards["trackingBoard"]?.map { it.toMutableList() }
 
-    fun updateGameStateForHit() {
-        Log.d("GameSetupViewModel", "HIT processado. Jogador continua.")
-        // Se necessário, pode adicionar lógica adicional aqui
-    }
-
-    fun handleShotResult(
-        result: String,
-        currentPlayer: String,
-        gameId: String,
-        onNavigateToWaitOpponent: () -> Unit
-    ) {
-        if (result == "HIT") {
-            // Permanece na GameScreen
-            Log.d("GameScreenViewModel", "HIT! O jogador continua jogando.")
-        } else if (result == "MISS") {
-            // Atualiza o estado dos jogadores e navega para WaitOpponent
-            FirebaseService.updatePlayerStates(
-                gameId = gameId,
-                currentPlayerName = currentPlayer,
-                onComplete = { success ->
-                    if (success) {
-                        onNavigateToWaitOpponent()
-                    } else {
-                        Log.e("GameScreenViewModel", "Erro ao atualizar os estados dos jogadores.")
-                    }
+                if (playerBoard != null) {
+                    _playerBoard.value = playerBoard
+                } else {
+                    Log.e("GameScreenViewModel", "Erro: Tabuleiro do jogador não encontrado.")
                 }
-            )
+
+                if (trackingBoard != null) {
+                    _trackingBoard.value = trackingBoard
+                } else {
+                    Log.e("GameScreenViewModel", "Erro: Tabuleiro de rastreamento não encontrado.")
+                }
+            } else {
+                Log.e("GameScreenViewModel", "Erro: Boards não carregados ou nulos.")
+            }
         }
     }
 
