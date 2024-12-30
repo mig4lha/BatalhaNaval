@@ -48,7 +48,7 @@ object FirebaseService {
             }
     }
 
-    // Registra um novo jogador
+    // Regista um novo jogador
     fun registerPlayer(nick: String, password: String, onComplete: (String?) -> Unit) {
         checkIfNickExists(nick) { isAvailable ->
             if (isAvailable) {
@@ -123,6 +123,7 @@ object FirebaseService {
             }
     }
 
+    //Recupera os jogadores do jogo
     fun getPlayers(gameId: String, onComplete: (String?, String?) -> Unit) {
         db.collection("games").document(gameId)
             .get()
@@ -296,6 +297,7 @@ object FirebaseService {
             }
     }
 
+    // Converte os dados do tabuleiro para uma matriz de células
     fun parseBoard(boardData: List<Map<String, Any>>?): List<List<CellState>> {
         // Inicializar o tabuleiro vazio
         val emptyBoard = List(8) { List(8) { CellState.EMPTY } }
@@ -334,6 +336,7 @@ object FirebaseService {
         return board
     }
 
+    // Atualiza o estado da célula no tabuleiro
     fun updateCellState(
         boardArray: MutableList<MutableMap<String, Any>>,
         changes: Map<String, String>
@@ -365,6 +368,7 @@ object FirebaseService {
         return boardArray
     }
 
+    // Atualiza os tabuleiros no Firestore
     fun updateBoards(
         gameId: String,
         currentPlayerName: String,
@@ -441,6 +445,7 @@ object FirebaseService {
             }
     }
 
+    //Recupera os jogos ativos para o jogador
     fun getActiveGamesForPlayer(playerName: String, onComplete: (List<Map<String, Any>>) -> Unit) {
         val db = FirebaseFirestore.getInstance()
         val gamesCollection = db.collection("games")
@@ -472,6 +477,7 @@ object FirebaseService {
             }
     }
 
+    // Atualiza os estados dos jogadores
     fun updatePlayerStatusAfterPlacement(gameId: String, currentPlayer: String, onComplete: () -> Unit) {
         val gameRef = FirebaseFirestore.getInstance().collection("games").document(gameId)
 
@@ -505,7 +511,7 @@ object FirebaseService {
             }
     }
 
-
+    // Atualiza os estados dos jogadores e o turno
     fun updatePlayerStates(
         gameId: String,
         currentPlayerName: String,
@@ -547,6 +553,7 @@ object FirebaseService {
             }
     }
 
+    //Recupera o estado do jogador a partir do ID do jogo
     fun getPlayerState(gameId: String, currentPlayer: String, onComplete: (String?) -> Unit) {
         db.collection("games").document(gameId)
             .get()
@@ -566,6 +573,7 @@ object FirebaseService {
             }
     }
 
+    //Recupera o nome do oponente a partir do ID do jogo
     fun getOpponentName(gameId: String, currentPlayer: String, onComplete: (String?) -> Unit) {
         db.collection("games").document(gameId)
             .get()
@@ -588,6 +596,7 @@ object FirebaseService {
             }
     }
 
+    //Finaliza o jogo e atualiza o leaderboard
     fun updateGameStatusToFinished(
         gameId: String,
         winner: String,
@@ -664,24 +673,7 @@ object FirebaseService {
         }
     }
 
-    //Salva o score
-    fun saveScorePlayer(playerId: String, score: Int) {
-        val data = mapOf(
-            "playerId" to playerId,
-            "score" to score,
-            "timestamp" to System.currentTimeMillis()
-        )
-
-        db.collection("leaderboard")
-            .add(data)
-            .addOnSuccessListener {
-                // Sucesso ao salvar a pontuação
-            }
-            .addOnFailureListener { e ->
-                Log.e("FirebaseService", "Erro ao salvar pontuação", e)
-            }
-    }
-
+    //Recupera os 10 melhores scores (ranking) e retorna via callback [onResult]
     fun getTopScores(onResult: (List<ScoreItem>) -> Unit) {
         db.collection("leaderboard")
             .orderBy("score", Query.Direction.ASCENDING)

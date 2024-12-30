@@ -18,15 +18,6 @@ class GameRepository {
     }
 
     /**
-     * Salva uma pontuação no Firestore (leaderboard).
-     * @param playerId identificador do jogador (pode ser o uid retornado pela Auth).
-     * @param score pontuação a ser salva.
-     */
-    fun saveScorePlayer(playerId: String, score: Int) {
-        FirebaseService.saveScorePlayer(playerId, score)
-    }
-
-    /**
      * Busca os 10 melhores scores (ranking) e retorna via callback [onResult].
      * @param onResult callback que recebe uma lista de [ScoreItem].
      */

@@ -7,40 +7,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.batalhanaval.data.firebase.FirebaseService
 
 @Composable
-fun LoginScreen(navController: NavController) {
-    var nick by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
-
-    // Função para fazer login
-    fun login() {
-        if (nick.isNotEmpty() && password.isNotEmpty()) {
-            isLoading = true
-            FirebaseService.loginPlayer(nick, password) { playerId ->
-                isLoading = false
-                if (playerId != null) {
-                    // Busca o nome do jogador após o login
-                    FirebaseService.getPlayerName(playerId) { name ->
-                        val playerNick = name ?: "Jogador1" // Nome obtido ou nome padrão
-                        // Passa o playerNick para o MainMenuScreen
-                        navController.navigate("main_menu/$playerNick") {
-                            launchSingleTop = true
-                            popUpTo("login_screen") { inclusive = true }
-                        }
-                    }
-                } else {
-                    errorMessage = "Nick or password incorrect!"
-                }
-            }
-        } else {
-            errorMessage = "Fill in all fields."
-        }
-    }
+fun LoginScreen(
+    navController: NavController,
+    viewModel: LoginScreenViewModel = viewModel()
+) {
+    val nick by viewModel.nick.collectAsState()
+    val password by viewModel.password.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     Box(
         modifier = Modifier
@@ -54,7 +32,7 @@ fun LoginScreen(navController: NavController) {
         ) {
             TextField(
                 value = nick,
-                onValueChange = { nick = it },
+                onValueChange = { viewModel.updateNick(it) },
                 label = { Text("Nick") },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -63,7 +41,7 @@ fun LoginScreen(navController: NavController) {
 
             TextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = { viewModel.updatePassword(it) },
                 label = { Text("Password") },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = PasswordVisualTransformation()
@@ -72,7 +50,14 @@ fun LoginScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = { login() },
+                onClick = {
+                    viewModel.login { playerNick ->
+                        navController.navigate("main_menu/$playerNick") {
+                            launchSingleTop = true
+                            popUpTo("login_screen") { inclusive = true }
+                        }
+                    }
+                },
                 enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
