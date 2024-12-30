@@ -109,8 +109,15 @@ class GameScreenViewModel : ViewModel() {
                             opponentBoardChanges
                         ) { success ->
                             if (success) {
-                                Log.d("RegisterShot", "HIT atualizado com sucesso. Permanecendo na tela.")
-                                onShotComplete(false) // Não navega; permanece no GameScreen.
+                                Log.d("RegisterShot", "HIT atualizado com sucesso.")
+                                checkVictory(gameId, currentPlayer) { isGameFinished ->
+                                    if (isGameFinished) {
+                                        onShotComplete(true) // Finaliza o jogo
+                                    } else {
+                                        triggerRefreshBoards() // Atualiza os tabuleiros
+                                        onShotComplete(false) // Permanece na tela
+                                    }
+                                }
                             } else {
                                 Log.e("RegisterShot", "Erro ao atualizar boards após HIT.")
                                 onShotComplete(false)
@@ -135,10 +142,9 @@ class GameScreenViewModel : ViewModel() {
                                 FirebaseService.updatePlayerStates(gameId, currentPlayer) { stateUpdated ->
                                     if (stateUpdated) {
                                         Log.d("RegisterShot", "Estados atualizados após MISS. Navegando para espera.")
-                                        onNavigateToWaitOpponent() // Navega para a tela de espera.
+                                        onNavigateToWaitOpponent()
                                     } else {
                                         Log.e("RegisterShot", "Erro ao atualizar estados dos jogadores.")
-                                        onShotComplete(false)
                                     }
                                 }
                             } else {
@@ -217,4 +223,41 @@ class GameScreenViewModel : ViewModel() {
             }
         }
     }
+
+    fun checkVictory(gameId: String, currentPlayer: String, onGameEnd: (Boolean) -> Unit) {
+        FirebaseService.getGameBoards(gameId, currentPlayer) { boards ->
+            if (boards.isEmpty()) {
+                Log.e("GameScreenViewModel", "Erro: Boards não carregados ou nulos.")
+                onGameEnd(false)
+                return@getGameBoards
+            }
+
+            val opponentBoard = boards["opponentBoard"] ?: run {
+                Log.e("GameScreenViewModel", "Erro: OpponentBoard não encontrado.")
+                onGameEnd(false)
+                return@getGameBoards
+            }
+
+            // Verifica se todos os navios do adversário foram afundados
+            val allShipsSunk = opponentBoard.flatten().all { cell ->
+                cell != CellState.SHIP
+            }
+
+            if (allShipsSunk) {
+                FirebaseService.updateGameStatusToFinished(gameId, currentPlayer) { success ->
+                    if (success) {
+                        Log.d("GameScreenViewModel", "O jogador $currentPlayer venceu o jogo!")
+                        onGameEnd(true)
+                    } else {
+                        Log.e("GameScreenViewModel", "Erro ao finalizar o jogo.")
+                        onGameEnd(false)
+                    }
+                }
+            } else {
+                onGameEnd(false)
+            }
+        }
+    }
+
+
 }

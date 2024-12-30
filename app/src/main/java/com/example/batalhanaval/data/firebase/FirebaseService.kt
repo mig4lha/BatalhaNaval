@@ -618,6 +618,60 @@ object FirebaseService {
             }
     }
 
+    fun updateGameStatusToFinished(
+        gameId: String,
+        winner: String,
+        onComplete: (Boolean) -> Unit
+    ) {
+        val gameRef = db.collection("games").document(gameId)
+
+        // Atualiza o status do jogo e identifica vencedor/perdedor
+        gameRef.get().addOnSuccessListener { document ->
+            val player1 = document.getString("player1") ?: return@addOnSuccessListener
+            val player2 = document.getString("player2") ?: return@addOnSuccessListener
+            val turnCount = document.getLong("turn")?.toInt() ?: 0 // Usa o campo `turn` existente
+
+            val updates = mutableMapOf<String, Any>(
+                "Status" to "finished",
+                "winner" to winner
+            )
+
+            // Atualiza os status dos jogadores
+            if (winner == player1) {
+                updates["player1Status"] = "winner"
+                updates["player2Status"] = "looser"
+            } else {
+                updates["player1Status"] = "looser"
+                updates["player2Status"] = "winner"
+            }
+
+            // Atualiza o Firestore
+            gameRef.update(updates).addOnSuccessListener {
+                Log.d("FirebaseService", "Jogo finalizado com sucesso.")
+
+                // Adiciona o vencedor ao leaderboard
+                val leaderboardRef = db.collection("leaderboard")
+                val leaderboardEntry = mapOf(
+                    "name" to winner,
+                    "score" to turnCount
+                )
+                leaderboardRef.add(leaderboardEntry).addOnSuccessListener {
+                    Log.d("FirebaseService", "Leaderboard atualizado com sucesso.")
+                    onComplete(true)
+                }.addOnFailureListener { e ->
+                    Log.e("FirebaseService", "Erro ao atualizar leaderboard.", e)
+                    onComplete(false)
+                }
+            }.addOnFailureListener { e ->
+                Log.e("FirebaseService", "Erro ao finalizar jogo.", e)
+                onComplete(false)
+            }
+        }.addOnFailureListener { e ->
+            Log.e("FirebaseService", "Erro ao buscar jogo.", e)
+            onComplete(false)
+        }
+    }
+
     fun isGameFinished(gameId: String, onComplete: (Boolean, String?) -> Unit) {
         db.collection("games").document(gameId)
             .get()

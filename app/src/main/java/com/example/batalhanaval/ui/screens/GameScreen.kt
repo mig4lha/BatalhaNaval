@@ -24,7 +24,7 @@ fun GameScreen(
     onGameEnd: () -> Unit,
     navigateToWaitOpponentScreen: () -> Unit,
     viewModel: GameScreenViewModel = viewModel()
-)  {
+) {
     val playerBoard = viewModel.playerBoard.collectAsState().value
     val trackingBoard = viewModel.trackingBoard.collectAsState().value
     val currentPlayerState = viewModel.currentPlayerState.collectAsState().value
@@ -58,13 +58,11 @@ fun GameScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Informações sobre o jogador atual e o adversário
         Text(
             text = "Jogador Atual: $currentPlayer | Adversário: ${opponentName ?: "Carregando..."}",
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Tabuleiro do jogador
         Text("Seu Tabuleiro:")
         Box(
             modifier = Modifier
@@ -89,7 +87,7 @@ fun GameScreen(
                                             CellState.EMPTY -> Color.LightGray
                                             CellState.SHIP -> Color.DarkGray
                                             CellState.HIT -> Color.Red
-                                            CellState.MISS -> Color.Black
+                                            CellState.MISS -> Color.Blue
                                         }
                                     )
                             )
@@ -99,7 +97,6 @@ fun GameScreen(
             }
         }
 
-        // Tabuleiro de tracking
         Text("Tabuleiro de Rastreamento:")
         Box(
             modifier = Modifier
@@ -124,21 +121,27 @@ fun GameScreen(
                                             currentPlayer = currentPlayer,
                                             row = rowIndex,
                                             col = colIndex,
+                                            onNavigateToWaitOpponent = navigateToWaitOpponentScreen,
                                             onShotComplete = { isGameFinished ->
                                                 if (isGameFinished) {
-                                                    onGameEnd() // Finaliza o jogo
+                                                    viewModel.checkVictory(gameId, currentPlayer) { gameEnded ->
+                                                        if (gameEnded) {
+                                                            onGameEnd()
+                                                        } else {
+                                                            viewModel.refreshBoards(gameId, currentPlayer)
+                                                        }
+                                                    }
                                                 } else {
                                                     viewModel.refreshBoards(gameId, currentPlayer)
                                                 }
-                                            },
-                                            onNavigateToWaitOpponent = navigateToWaitOpponentScreen
+                                            }
                                         )
                                     }
                                     .background(
                                         when (cell) {
                                             CellState.EMPTY -> Color.LightGray
                                             CellState.HIT -> Color.Red
-                                            CellState.MISS -> Color.Black
+                                            CellState.MISS -> Color.Blue
                                             else -> Color.Transparent
                                         }
                                     )
