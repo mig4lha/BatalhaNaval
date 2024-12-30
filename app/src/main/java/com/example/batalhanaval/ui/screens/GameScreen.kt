@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,93 +60,116 @@ fun GameScreen(
             .padding(16.dp)
     ) {
         Text(
-            text = "Jogador Atual: $currentPlayer | Adversário: ${opponentName ?: "Carregando..."}",
-            modifier = Modifier.padding(bottom = 16.dp)
+            text = "Current Player: $currentPlayer | Opponent: ${opponentName ?: "Loading..."}",
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(bottom = 16.dp)
         )
 
-        Text("Seu Tabuleiro:")
-        Box(
+        LazyColumn(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
+                .fillMaxSize()
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                playerBoard.forEach { row ->
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
+            item {
+                Text(
+                    text = "Your Board:",
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 8.dp)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        row.forEach { cell ->
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .border(1.dp, Color.Black)
-                                    .background(
-                                        when (cell) {
-                                            CellState.EMPTY -> Color.LightGray
-                                            CellState.SHIP -> Color.DarkGray
-                                            CellState.HIT -> Color.Red
-                                            CellState.MISS -> Color.Blue
-                                        }
+                        playerBoard.forEach { row ->
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                row.forEach { cell ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .border(1.dp, Color.Black)
+                                            .background(
+                                                when (cell) {
+                                                    CellState.EMPTY -> Color.LightGray
+                                                    CellState.SHIP -> Color.DarkGray
+                                                    CellState.HIT -> Color.Red
+                                                    CellState.MISS -> Color.Blue
+                                                }
+                                            )
                                     )
-                            )
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Text("Tabuleiro de Rastreamento:")
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                trackingBoard.forEachIndexed { rowIndex, row ->
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
+            item {
+                Text(
+                    text = "Tracking Board:",
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 8.dp)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        row.forEachIndexed { colIndex, cell ->
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .border(1.dp, Color.Black)
-                                    .clickable(enabled = currentPlayerState == "playing" && cell == CellState.EMPTY) {
-                                        viewModel.registerShot(
-                                            gameId = gameId,
-                                            currentPlayer = currentPlayer,
-                                            row = rowIndex,
-                                            col = colIndex,
-                                            onNavigateToWaitOpponent = navigateToWaitOpponentScreen,
-                                            onShotComplete = { isGameFinished ->
-                                                if (isGameFinished) {
-                                                    viewModel.checkVictory(gameId, currentPlayer) { gameEnded ->
-                                                        if (gameEnded) {
-                                                            onGameEnd()
+                        trackingBoard.forEachIndexed { rowIndex, row ->
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                row.forEachIndexed { colIndex, cell ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .border(1.dp, Color.Black)
+                                            .clickable(enabled = currentPlayerState == "playing" && cell == CellState.EMPTY) {
+                                                viewModel.registerShot(
+                                                    gameId = gameId,
+                                                    currentPlayer = currentPlayer,
+                                                    row = rowIndex,
+                                                    col = colIndex,
+                                                    onNavigateToWaitOpponent = navigateToWaitOpponentScreen,
+                                                    onShotComplete = { isGameFinished ->
+                                                        if (isGameFinished) {
+                                                            viewModel.checkVictory(gameId, currentPlayer) { gameEnded ->
+                                                                if (gameEnded) {
+                                                                    onGameEnd()
+                                                                } else {
+                                                                    viewModel.refreshBoards(gameId, currentPlayer)
+                                                                }
+                                                            }
                                                         } else {
                                                             viewModel.refreshBoards(gameId, currentPlayer)
                                                         }
                                                     }
-                                                } else {
-                                                    viewModel.refreshBoards(gameId, currentPlayer)
-                                                }
+                                                )
                                             }
-                                        )
-                                    }
-                                    .background(
-                                        when (cell) {
-                                            CellState.EMPTY -> Color.LightGray
-                                            CellState.HIT -> Color.Red
-                                            CellState.MISS -> Color.Blue
-                                            else -> Color.Transparent
-                                        }
+                                            .background(
+                                                when (cell) {
+                                                    CellState.EMPTY -> Color.LightGray
+                                                    CellState.HIT -> Color.Red
+                                                    CellState.MISS -> Color.Blue
+                                                    else -> Color.Transparent
+                                                }
+                                            )
                                     )
-                            )
+                                }
+                            }
                         }
                     }
                 }

@@ -3,6 +3,7 @@ package com.example.batalhanaval.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
@@ -31,101 +32,94 @@ fun PlayerRegistrationScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.Center
+        contentAlignment = Alignment.Center
     ) {
-        Text(text = "Enter your Nick!")
-        Spacer(modifier = Modifier.height(20.dp))
-
-        TextField(
-            value = nick,
-            onValueChange = { newNick ->
-                nick = newNick
-            },
-            label = { Text("Nick") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Exibe mensagem de erro se o nick já existir
-        if (!isNickAvailable && nick.isNotEmpty()) {
-            Text(
-                text = "This nickname is already in use. Please choose another one!",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(text = "Enter your Password")
-        Spacer(modifier = Modifier.height(20.dp))
-
-        TextField(
-            value = password,
-            onValueChange = { newPassword ->
-                password = newPassword
-            },
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation()
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(text = "Confirm your Password")
-        Spacer(modifier = Modifier.height(20.dp))
-
-        TextField(
-            value = confirmPassword,
-            onValueChange = { newConfirmPassword ->
-                confirmPassword = newConfirmPassword
-            },
-            label = { Text("Confirm Password") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation()
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Validando se as senhas coincidem
-        if (password != confirmPassword) {
-            Text(
-                text = "Passwords do not match!",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Botão para registrar o jogador
-        Button(
-            onClick = {
-                if (nick.isNotEmpty() && password.isNotEmpty() && password == confirmPassword && isNickAvailable) {
-                    isLoading = true
-                    FirebaseService.registerPlayer(nick, password) { playerId ->
-                        isLoading = false
-                        if (playerId != null) {
-                            // Jogador registrado com sucesso, navega para o menu principal
-                            onPlayerRegistered(playerId)
-                        } else {
-                            // Caso ocorra erro no registro
-                            onError("Failed to register player!")
-                        }
-                    }
-                } else {
-                    onError("Verify the information provided.")
-                }
-            },
-            enabled = isNickAvailable && password.isNotEmpty() && password == confirmPassword && !isLoading,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = if (isLoading) "Registering..." else "Register")
+            Text(text = "Enter your Nick!")
+
+            TextField(
+                value = nick,
+                onValueChange = { newNick ->
+                    nick = newNick
+                },
+                label = { Text("Nick") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Exibe mensagem de erro se o nick já existir
+            if (!isNickAvailable && nick.isNotEmpty()) {
+                Text(
+                    text = "This nickname is already in use. Please choose another one!",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Text(text = "Enter your Password")
+
+            TextField(
+                value = password,
+                onValueChange = { newPassword ->
+                    password = newPassword
+                },
+                label = { Text("Password") },
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation()
+            )
+
+            Text(text = "Confirm your Password")
+
+            TextField(
+                value = confirmPassword,
+                onValueChange = { newConfirmPassword ->
+                    confirmPassword = newConfirmPassword
+                },
+                label = { Text("Confirm Password") },
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation()
+            )
+
+            // Validando se as senhas coincidem
+            if (password != confirmPassword) {
+                Text(
+                    text = "Passwords do not match!",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            // Botão para registrar o jogador
+            Button(
+                onClick = {
+                    if (nick.isNotEmpty() && password.isNotEmpty() && password == confirmPassword && isNickAvailable) {
+                        isLoading = true
+                        FirebaseService.registerPlayer(nick, password) { playerId ->
+                            isLoading = false
+                            if (playerId != null) {
+                                // Jogador registrado com sucesso, navega para o menu principal
+                                onPlayerRegistered(playerId)
+                            } else {
+                                // Caso ocorra erro no registro
+                                onError("Failed to register player!")
+                            }
+                        }
+                    } else {
+                        onError("Verify the information provided.")
+                    }
+                },
+                enabled = isNickAvailable && password.isNotEmpty() && password == confirmPassword && !isLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = if (isLoading) "Registering..." else "Register")
+            }
         }
     }
 }

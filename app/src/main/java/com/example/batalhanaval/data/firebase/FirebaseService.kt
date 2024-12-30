@@ -684,7 +684,7 @@ object FirebaseService {
 
     fun getTopScores(onResult: (List<ScoreItem>) -> Unit) {
         db.collection("leaderboard")
-            .orderBy("score", Query.Direction.DESCENDING)
+            .orderBy("score", Query.Direction.ASCENDING)
             .limit(10)
             .get()
             .addOnSuccessListener { querySnapshot ->

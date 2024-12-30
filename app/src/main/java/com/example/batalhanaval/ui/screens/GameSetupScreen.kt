@@ -8,6 +8,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -25,57 +26,125 @@ fun GameSetupScreen(
 ) {
     val board = viewModel.board.collectAsState().value
     val ships = viewModel.ships.collectAsState().value
-    val selectedShip = viewModel.selectedShip.collectAsState().value
     val isHorizontal = viewModel.isHorizontal.collectAsState().value
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Coloque seus barcos")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // Título
+        Text(
+            text = "Place Your Ships",
+            style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(bottom = 16.dp)
+        )
 
-        // Mostrar os barcos disponíveis
-        Row(modifier = Modifier.padding(bottom = 16.dp)) {
-            ships.forEach { ship ->
-                Button(onClick = { viewModel.selectShip(ship) }) {
-                    Text("Barco (${ship.size} células)")
+        // Tabuleiro em primeiro
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f) // Garante que o tabuleiro tenha prioridade de espaço
+                .padding(bottom = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                board.forEachIndexed { rowIndex, row ->
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        row.forEachIndexed { colIndex, cell ->
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .border(1.dp, Color.Black)
+                                    .clickable { viewModel.placeShip(rowIndex, colIndex) }
+                                    .background(
+                                        when (cell) {
+                                            CellState.EMPTY -> Color.LightGray
+                                            CellState.SHIP -> Color.DarkGray
+                                            else -> Color.Transparent
+                                        }
+                                    )
+                            ) {}
+                        }
+                    }
                 }
             }
         }
 
-        // Mostrar tabuleiro
-        board.forEachIndexed { rowIndex, row ->
-            Row {
-                row.forEachIndexed { colIndex, cell ->
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .border(1.dp, Color.Black)
-                            .clickable { viewModel.placeShip(rowIndex, colIndex) }
-                            .background(
-                                when (cell) {
-                                    CellState.EMPTY -> Color.LightGray
-                                    CellState.SHIP -> Color.DarkGray
-                                    else -> Color.Transparent
-                                }
-                            )
-                    ) {}
+        // Barcos disponíveis
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            // Dividir barcos em duas linhas
+            val firstRowShips = ships.take(ships.size / 2)
+            val secondRowShips = ships.drop(ships.size / 2)
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            ) {
+                firstRowShips.forEach { ship ->
+                    Button(
+                        onClick = { viewModel.selectShip(ship) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Ship (${ship.size} cells)")
+                    }
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                secondRowShips.forEach { ship ->
+                    Button(
+                        onClick = { viewModel.selectShip(ship) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Ship (${ship.size} cells)")
+                    }
                 }
             }
         }
 
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            Button(onClick = { viewModel.toggleOrientation() }) {
-                Text(if (isHorizontal) "Horizontal" else "Vertical")
-            }
-            Button(onClick = {
-                viewModel.saveBoardAndSwitchPlayer(gameId, currentPlayer) {
-                    onWaitForOpponent()
+        // Botões de controle
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                Button(onClick = { viewModel.toggleOrientation() }) {
+                    Text(if (isHorizontal) "Horizontal" else "Vertical")
                 }
-            }) {
-                Text("Finalizar Configuração")
+                Spacer(modifier = Modifier.width(16.dp))
+                Button(onClick = {
+                    viewModel.saveBoardAndSwitchPlayer(gameId, currentPlayer) {
+                        onWaitForOpponent()
+                    }
+                }) {
+                    Text("Finish Setup")
+                }
             }
-        }
 
-        Button(onClick = onBackToMenu, modifier = Modifier.padding(top = 16.dp)) {
-            Text("Voltar ao Menu Principal")
+            Button(
+                onClick = onBackToMenu,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text("Return to Menu")
+            }
         }
     }
 }

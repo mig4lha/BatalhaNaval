@@ -60,7 +60,6 @@ class MainActivity : ComponentActivity() {
                             playerName = playerName,
                             onStartOnlineGame = { navController.navigate("choose_opponent/$playerName") },
                             onShowLeaderboard = { navController.navigate("leaderboard") },
-                            onShowChooseOpponent = { navController.navigate("choose_opponent/$playerName") },
                             onShowActiveGames = { navController.navigate("active_games/$playerName") }
                         )
                     }

@@ -3,6 +3,7 @@ package com.example.batalhanaval.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -41,54 +42,60 @@ fun LoginScreen(navController: NavController) {
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.Center
+        contentAlignment = Alignment.Center
     ) {
-        TextField(
-            value = nick,
-            onValueChange = { nick = it },
-            label = { Text("Nick") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        TextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = { login() },
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text(text = if (isLoading) "Loading.." else "Sign")
-        }
+            TextField(
+                value = nick,
+                onValueChange = { nick = it },
+                label = { Text("Nick") },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        if (errorMessage.isNotEmpty()) {
-            Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
-        }
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
+            TextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation()
+            )
 
-        TextButton(
-            onClick = {
-                navController.navigate("register") {
-                    launchSingleTop = true
-                    popUpTo("login_screen") { inclusive = false }
-                }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { login() },
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = if (isLoading) "Loading.." else "Sign")
             }
-        ) {
-            Text("Click here for register")
+
+            if (errorMessage.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            TextButton(
+                onClick = {
+                    navController.navigate("register") {
+                        launchSingleTop = true
+                        popUpTo("login_screen") { inclusive = false }
+                    }
+                }
+            ) {
+                Text("Click here for register")
+            }
         }
     }
 }
