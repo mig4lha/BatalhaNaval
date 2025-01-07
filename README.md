@@ -1,5 +1,7 @@
 # Batalha Naval
 
+https://github.com/mig4lha/BatalhaNaval
+
 Bem-vindo ao projeto **Batalha Naval**, um jogo clássico desenvolvido para dispositivos Android, utilizando o **Kotlin** e o **Jetpack Compose**. Este projeto inclui funcionalidades de login, registro, gerenciamento de jogos online e um placar de líderes para acompanhar os melhores jogadores.
 
 ## 🚀 Funcionalidades
